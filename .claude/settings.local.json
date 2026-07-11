@@ -39,7 +39,9 @@
       "Bash(mcp-atlassian --help)",
       "Bash(start *)",
       "Bash(del *)",
-      "Bash(mcp-atlassian --version)"
+      "Bash(mcp-atlassian --version)",
+      "PowerShell(Get-ChildItem -Path 'C:\\\\Vivek''s Workspace\\\\Projects\\\\Project Phase 1' -Recurse -Force | Select-Object FullName | ForEach-Object { $_.FullName.Replace\\('C:\\\\Vivek''s Workspace\\\\Projects\\\\Project Phase 1', ''\\) } | Sort-Object)",
+      "Bash(git mv *)"
     ]
   }
 }
