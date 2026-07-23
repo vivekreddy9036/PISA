@@ -68,7 +68,17 @@
       "Bash(sudo dpkg -i /tmp/claude-1000/-home-vivek-PISA/6a0e850c-2fce-4fac-8ab7-210c24789e18/scratchpad/vscode.deb)",
       "Bash(sudo -S dpkg -i /tmp/claude-1000/-home-vivek-PISA/6a0e850c-2fce-4fac-8ab7-210c24789e18/scratchpad/vscode.deb)",
       "Bash(sudo -S apt-get -f install -y)",
-      "Bash(code --version)"
+      "Bash(code --version)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(curl -s http://localhost:5000/health)",
+      "Bash(curl -s http://localhost:5000/api/info)",
+      "Bash(curl -s -X POST http://localhost:5000/api/scan -H \"Content-Type: application/json\" -d '{\"demo\": true, \"duration\": 5}')",
+      "Bash(curl -s http://localhost:5000/api/scan/1/status)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5000/sessions/1)",
+      "Bash(curl -s http://localhost:5000/)",
+      "Bash(pkill -f \"python run.py\")",
+      "Bash(jobs)"
     ]
   }
 }
