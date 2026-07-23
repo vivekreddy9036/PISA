@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}PISA{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header class="pisa-header">
+    <a href="{{ url_for('dashboard.index') }}" class="pisa-logo">PISA</a>
+    <span class="pisa-subtitle">Portable IoT Security Assessment</span>
+  </header>
+  <main class="pisa-main">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

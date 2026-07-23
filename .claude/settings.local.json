@@ -41,7 +41,28 @@
       "Bash(del *)",
       "Bash(mcp-atlassian --version)",
       "PowerShell(Get-ChildItem -Path 'C:\\\\Vivek''s Workspace\\\\Projects\\\\Project Phase 1' -Recurse -Force | Select-Object FullName | ForEach-Object { $_.FullName.Replace\\('C:\\\\Vivek''s Workspace\\\\Projects\\\\Project Phase 1', ''\\) } | Sort-Object)",
-      "Bash(git mv *)"
+      "Bash(git mv *)",
+      "Bash(rfkill list *)",
+      "Bash(ip link *)",
+      "Bash(nmcli device *)",
+      "Bash(nmcli radio *)",
+      "Bash(lsusb)",
+      "Bash(lspci)",
+      "Bash(lsmod)",
+      "Bash(dmesg)",
+      "Bash(journalctl -u NetworkManager --no-pager -n 200)",
+      "Bash(sudo -n cat /etc/netplan/50-cloud-init.yaml 2>&1)",
+      "Bash(sudo cat /etc/netplan/50-cloud-init.yaml)",
+      "Bash(sudo -S bash -c ' *)",
+      "Bash(sudo systemctl status ssh --no-pager)",
+      "Read(//tmp/**)",
+      "Bash(curl -sS -o /dev/null -w \"HTTP %{http_code}, time %{time_total}s\\\\n\" --max-time 8 https://update.code.visualstudio.com/)",
+      "Bash(curl -sS -o /dev/null -w \"HTTP %{http_code}, time %{time_total}s\\\\n\" --max-time 8 https://vscode.download.prss.microsoft.com/)",
+      "Bash(pkill -9 -f '.vscode-server/code-')",
+      "Bash(rm -rf /tmp/.tmpPLsQsB /tmp/.tmpvIEXRJ)",
+      "Bash(echo \"grep exit: $?\")",
+      "Bash(xargs -I{} cat {})",
+      "Bash(/usr/bin/pytest tests/ -v)"
     ]
   }
 }

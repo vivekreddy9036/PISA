@@ -39,6 +39,9 @@ def score_network(network: dict) -> tuple[int, str]:
     if network.get("pmf_enabled"):
         score += _W["pmf_bonus"]
 
+    if network.get("wps_enabled"):
+        score += _W["wps_penalty"]
+
     score = max(0, min(score, 100))
     grade = next((g for g, threshold in _GRADES if score >= threshold), "F")
     return score, grade

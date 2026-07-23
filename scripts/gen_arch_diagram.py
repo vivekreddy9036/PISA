@@ -1,3 +1,4 @@
+import os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -139,6 +140,10 @@ fig.text(0.012, 0.005,
          fontfamily='DejaVu Sans', fontstyle='italic', linespacing=1.4)
 
 # ── Save ─────────────────────────────────────────────────────────────────────
-out = r"C:\Vivek's Workspace\Projects\Project Phase 1\PISA_Architecture_Diagram.png"
+out = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "docs", "diagrams",
+    "PISA_Architecture_Diagram.png",
+)
+out = os.path.abspath(out)
 plt.savefig(out, dpi=220, bbox_inches='tight', facecolor='white', pad_inches=0.15)
 print(f"Saved: {out}")

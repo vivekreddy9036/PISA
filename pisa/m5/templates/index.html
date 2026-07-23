@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}PISA — Sessions{% endblock %}
+{% block content %}
+<section class="scan-panel">
+  <h2>Start New Scan</h2>
+  <form id="scan-form">
+    <label>Interface
+      <input type="text" name="iface" value="{{ default_iface }}">
+    </label>
+    <label>Duration (s)
+      <input type="number" name="duration" value="{{ default_duration }}" min="1">
+    </label>
+    <label class="checkbox-label">
+      <input type="checkbox" name="demo" checked>
+      Demo Mode (no monitor-mode adapter required)
+    </label>
+    <button type="submit">Start Scan</button>
+  </form>
+  <p id="scan-status"></p>
+</section>
+
+<section class="session-list">
+  <h2>Scan Sessions</h2>
+  {% if sessions %}
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Started</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr>
+        <td>{{ s.id }}</td>
+        <td>{{ s.started_at }}</td>
+        <td><span class="status status-{{ s.status }}">{{ s.status }}</span></td>
+        <td><a href="{{ url_for('sessions.detail', session_id=s.id) }}">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No scans yet. Start one above.</p>
+  {% endif %}
+</section>
+
+<script>
+document.getElementById('scan-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const body = {
+    iface: form.iface.value,
+    duration: parseInt(form.duration.value, 10),
+    demo: form.demo.checked,
+  };
+  const statusEl = document.getElementById('scan-status');
+  const res = await fetch('/api/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  statusEl.textContent = 'Scan started (session ' + data.session_id + ')...';
+
+  const poll = setInterval(async () => {
+    const r = await fetch('/api/scan/' + data.session_id + '/status');
+    const s = await r.json();
+    statusEl.textContent = 'Session ' + data.session_id + ': ' + s.status;
+    if (s.status === 'done' || s.status === 'error') {
+      clearInterval(poll);
+      if (s.status === 'done') {
+        window.location.href = '/sessions/' + data.session_id;
+      }
+    }
+  }, 1500);
+});
+</script>
+{% endblock %}

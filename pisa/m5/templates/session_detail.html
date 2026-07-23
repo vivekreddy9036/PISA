@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Session {{ session.id }} — PISA{% endblock %}
+{% block content %}
+<a href="{{ url_for('dashboard.index') }}" class="back-link">&larr; All sessions</a>
+<h2>Session {{ session.id }}</h2>
+<p class="session-meta">
+  Started: {{ session.started_at }}
+  &middot; Status: <span class="status status-{{ session.status }}">{{ session.status }}</span>
+</p>
+
+{% if networks %}
+<table class="networks-table">
+  <thead>
+    <tr>
+      <th>BSSID</th><th>SSID</th><th>Ch</th><th>Signal</th><th>Security</th><th>WSPS</th><th>CVEs</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for n in networks %}
+    <tr>
+      <td>{{ n.bssid }}</td>
+      <td>{{ n.ssid or '(hidden)' }}</td>
+      <td>{{ n.channel }}</td>
+      <td>{{ n.signal_dbm }} dBm</td>
+      <td>{{ n.security }}</td>
+      <td><span class="grade grade-{{ n.wsps_grade }}">{{ n.wsps_grade }} ({{ n.wsps_score }})</span></td>
+      <td class="cve-cell" data-network-id="{{ n.id }}">
+        {% set cves = cves_by_network.get(n.id, []) %}
+        {% if cves %}
+          <ul>{% for c in cves %}<li>{{ c.cve_id }} (CVSS {{ c.cvss_score }})</li>{% endfor %}</ul>
+        {% else %}
+          <button class="check-cves-btn" data-network-id="{{ n.id }}">Check CVEs</button>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No networks captured in this session yet.</p>
+{% endif %}
+
+<script>
+document.querySelectorAll('.check-cves-btn').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    const id = btn.dataset.networkId;
+    btn.textContent = 'Checking...';
+    btn.disabled = true;
+    const res = await fetch('/api/networks/' + id + '/cves', { method: 'POST' });
+    const data = await res.json();
+    const cell = document.querySelector('.cve-cell[data-network-id="' + id + '"]');
+    cell.innerHTML = '';
+    if (data.cves && data.cves.length) {
+      const ul = document.createElement('ul');
+      data.cves.forEach((c) => {
+        const li = document.createElement('li');
+        li.textContent = c.cve_id + ' (CVSS ' + c.cvss_score + ')';
+        ul.appendChild(li);
+      });
+      cell.appendChild(ul);
+    } else {
+      cell.textContent = 'No known CVEs';
+    }
+  });
+});
+</script>
+{% endblock %}

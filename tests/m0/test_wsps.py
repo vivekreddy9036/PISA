@@ -37,3 +37,12 @@ def test_missing_fields_do_not_crash():
     score, grade = score_network({})
     assert isinstance(score, int)
     assert grade in ("A", "B", "C", "D", "E", "F")
+
+
+def test_wps_enabled_applies_penalty():
+    net_no_wps = {"encryption": "WPA2", "channel": 1, "signal_dbm": -60,
+                  "beacon_interval": 100, "pmf_enabled": 0, "hidden": 0, "wps_enabled": 0}
+    net_wps = {**net_no_wps, "wps_enabled": 1}
+    score_plain, _ = score_network(net_no_wps)
+    score_wps, _ = score_network(net_wps)
+    assert score_wps < score_plain

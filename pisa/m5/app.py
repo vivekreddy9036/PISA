@@ -1,17 +1,25 @@
-import sqlite3
 from flask import Flask, jsonify
 import config
+from pisa.db.connection import get_connection
 from pisa.db.models import create_tables
+from pisa.m5.routes.api import bp as api_bp
+from pisa.m5.routes.dashboard import bp as dashboard_bp
+from pisa.m5.routes.sessions import bp as sessions_bp
 
 
-def create_app() -> Flask:
+def create_app(db_path: str = None) -> Flask:
     app = Flask(__name__)
+    app.config["DB_PATH"] = db_path or config.DB_PATH
 
-    with sqlite3.connect(config.DB_PATH) as conn:
+    with get_connection(app.config["DB_PATH"]) as conn:
         create_tables(conn)
 
-    @app.route("/")
-    def index():
+    app.register_blueprint(dashboard_bp)
+    app.register_blueprint(sessions_bp)
+    app.register_blueprint(api_bp)
+
+    @app.route("/api/info")
+    def info():
         return jsonify({
             "system": "PISA — Portable IoT Security Assessment",
             "version": "0.1.0",
@@ -29,10 +37,10 @@ def create_app() -> Flask:
     @app.route("/health")
     def health():
         try:
-            with sqlite3.connect(config.DB_PATH) as conn:
+            with get_connection(app.config["DB_PATH"]) as conn:
                 conn.execute("SELECT 1")
             db_ok = True
-        except Exception as e:
+        except Exception:
             db_ok = False
         return jsonify({
             "db": "ok" if db_ok else "error",

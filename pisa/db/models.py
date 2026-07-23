@@ -23,6 +23,7 @@ def create_tables(conn: sqlite3.Connection) -> None:
         encryption       TEXT,
         beacon_interval  INTEGER,
         pmf_enabled      INTEGER DEFAULT 0,
+        wps_enabled      INTEGER DEFAULT 0,
         hidden           INTEGER DEFAULT 0,
         wsps_score       INTEGER,
         wsps_grade       TEXT,

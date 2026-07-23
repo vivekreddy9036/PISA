@@ -15,6 +15,7 @@
 
 ## Table of Contents
 
+0. [Current Implementation Status](#0-current-implementation-status)
 1. [Project Identity](#1-project-identity)
 2. [Problem Statement](#2-problem-statement)
 3. [Research Objectives](#3-research-objectives)
@@ -35,6 +36,33 @@
 18. [Publication Strategy](#18-publication-strategy)
 19. [Extensions — If Time Permits](#19-extensions--if-time-permits)
 20. [Budget](#20-budget)
+
+---
+
+## 0. Current Implementation Status
+
+The rest of this document describes the full intended system. This section
+states plainly what exists in code today, so it can be read on its own terms
+rather than assumed to describe a finished system.
+
+| Module | Status | Notes |
+|---|---|---|
+| M0 — Beacon capture | **Implemented** | Passive 802.11 beacon sniffing via Scapy; parses SSID/BSSID/channel/security/PMF/WPS |
+| M0 — WSPS scoring | **Partial** | 7 of the originally-proposed 8 factors implemented (encryption, channel, signal, beacon interval, PMF, WPS, hidden SSID); cipher-suite and CVE-exposure factors deferred — see §8.0.2 |
+| M0 — OUI→CVE correlation | **Implemented** | On-demand vendor lookup + live NVD 2.0 API query, triggered per-network from the dashboard |
+| M0 — Handshake capture | Planned | Stub only |
+| M1 — Network discovery | Planned | Stub only |
+| M2 — Protocol fingerprinting | Planned | Stub only |
+| M3 — CVE correlation (beyond OUI-CVE) | Planned | Stub only |
+| M4 — Exploit pipeline | Planned | Stub only |
+| M5 — Dashboard | **Implemented** | Session list, scan trigger (real + demo mode), session detail with WSPS grade badges, on-demand CVE lookup |
+| AWS / Terraform | Planned | Terraform file is a placeholder; no Lambda/DynamoDB/S3 wiring exists |
+
+**Why this matters:** sections below (system architecture, database design,
+timeline) describe the target system this project is building toward. Where
+a section's implementation has diverged from what's written (the WSPS
+formula, §8.0.2; the database schema, §12), an inline note points back here
+rather than the section silently overstating current state.
 
 ---
 
@@ -417,25 +445,29 @@ WiFi Adapter (Monitor Mode)
 #### 0.2 WiFi Security Posture Score (WSPS) Framework
 Computed per network from passive beacon data alone — zero network interaction required.
 
-**WSPS formula:**
-```
-WSPS = w₁·E + w₂·W + w₃·M + w₄·P + w₅·C + w₆·V + w₇·S + w₈·T
-```
+> **Implementation status (v1, current):** the formula below reflects what is actually implemented in `pisa/m0/wsps.py` today — 7 additive factors, each contributing a fixed point value rather than a percentage weight of a 0–100 sub-score. This differs from the original 8-factor design proposed earlier in the project; see the note at the end of this subsection for what's deferred and why.
 
-| Factor | Symbol | Weight | Scoring Logic |
-|---|---|---|---|
-| Encryption type | E | 25% | WPA3-SAE=100, WPA3-Transition=80, WPA2-CCMP=65, WPA2-TKIP=25, WEP=0, Open=0 |
-| WPS status | W | 20% | Disabled=100, Enabled=0 (WPS PIN attacks trivially exploit this) |
-| Management Frame Protection (802.11w) | M | 15% | Required=100, Capable=50, None=0 |
-| PMKID offline crack feasibility | P | 12% | RSN PMKID absent=100, PMKID present (crackable)=0 |
-| Cipher suite | C | 10% | CCMP-128=100, CCMP-256=100, TKIP=0 |
-| Router CVE exposure | V | 10% | Scaled: 0 CVEs=100; −15 per Critical, −8 per High, −3 per Medium |
-| SSID hygiene | S | 5% | Non-default, non-broadcast=100; default SSID pattern (e.g. "TP-Link_XXXX")=30 |
-| Temporal stability | T | 3% | No WSPS degradation since last scan=100; score dropped from last session=0 |
+**Implemented factors (`pisa/m0/wsps.py`, weights in `config.WSPS_WEIGHTS`):**
 
-**Grade mapping:** A (90–100), B (75–89), C (60–74), D (45–59), F (<45)
+| Factor | Points | Scoring Logic |
+|---|---|---|
+| Encryption type | up to 35 | WPA3=35, WPA2=25, WPA=10, Open=0 |
+| Channel | up to 15 | Non-overlapping channel (1/6/11)=15, other channel=5, none=0 |
+| Signal strength | up to 20 | >−50 dBm=20, >−70 dBm=12, >−85 dBm=6, weaker=0 |
+| Beacon interval | up to 12 | Standard 100 TU=12, non-standard=5 |
+| Management Frame Protection (802.11w) | +15 | PMF capability bit set in RSN IE=+15, else 0 |
+| WPS status | −15 | WPS vendor-specific IE (00:50:F2, type 04) present=−15 penalty, absent=0 |
+| Hidden SSID | −10 | Empty SSID in beacon=−10 penalty, else 0 |
 
-**Ablation study planned:** We will evaluate WSPS with all 8 factors vs subsets (encryption+WPS only, then +MFP, then +CVE, etc.) to quantify each factor's marginal contribution to expert-agreement accuracy (Cohen's κ). This will be Section VIII-A of the research paper.
+Score is the sum of the above, clamped to [0, 100].
+
+**Grade mapping (`config.WSPS_GRADES`):** A (≥90), B (≥75), C (≥60), D (≥45), E (≥30), F (<30)
+
+**Deferred to a later phase (not yet implemented):**
+- **Cipher suite** (CCMP vs TKIP distinction) — the RSN IE parsing already extracts the AKM suite for WPA2/WPA3 detection; extracting the pairwise cipher suite from the same structure is a natural next addition.
+- **Router CVE exposure as a scoring input** — OUI→CVE correlation is implemented (`pisa/m0/oui_cve.py`) and surfaced in the dashboard, but is *not* folded into the WSPS score itself, because doing so would make `score_network()` depend on a live network call (NVD lookup) rather than being a pure function of packet-derived data — this would break offline scoring and make the existing unit tests dependent on mocking an external API.
+- **PMKID offline crack feasibility** — requires active association/EAPOL interaction, not passive beacon sniffing; out of scope for the current passive-only capture architecture.
+- **SSID hygiene** and **temporal stability (drift)** factors, and the planned ablation study (Cohen's κ across factor subsets) — deferred until the above are implemented and a labeled dataset for expert-agreement comparison exists.
 
 #### 0.3 OUI-to-CVE Correlation
 ```
@@ -1084,144 +1116,129 @@ fn_signature_update
 
 ### SQLite Schema (Local — On Device)
 
+> **Note:** this schema is generated from the actual implementation (`pisa/db/models.py`), not an aspirational design — it intentionally uses simpler `INTEGER PRIMARY KEY AUTOINCREMENT` session ids and no `CHECK` constraints, since SQLite doesn't need them for v1's usage pattern and every constraint here is enforced in application code (`pisa/db/queries.py`) instead. All 9 tables are created on startup; only `sessions`, `networks`, and `network_cves` are actively populated by v1 (M0 + dashboard). `devices` onward are defined and ready for M1–M4 but not yet written to by any code path, since those modules are still stubs.
+
 ```sql
 -- Assessment sessions
 CREATE TABLE sessions (
-    session_id TEXT PRIMARY KEY,
-    start_time DATETIME,
-    end_time DATETIME,
-    operator TEXT,
-    target_network TEXT,
-    mode TEXT CHECK(mode IN ('passive', 'active', 'authorized')),
-    status TEXT
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at      TEXT    NOT NULL,
+    ended_at        TEXT,
+    target_network  TEXT,
+    status          TEXT    DEFAULT 'active',
+    notes           TEXT
 );
 
--- WiFi networks discovered
+-- WiFi networks discovered (M0 — implemented)
 CREATE TABLE networks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT REFERENCES sessions(session_id),
-    ssid TEXT,
-    bssid TEXT,
-    encryption_type TEXT,
-    cipher_suite TEXT,
-    wps_enabled BOOLEAN,
-    pmf_status TEXT,
-    signal_strength INTEGER,
-    wsps_score INTEGER,
-    wsps_grade TEXT CHECK(wsps_grade IN ('A','B','C','D','F')),
-    oui TEXT,
-    router_manufacturer TEXT,
-    handshake_captured BOOLEAN DEFAULT FALSE,
-    handshake_s3_path TEXT,
-    geolat REAL,
-    geolng REAL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id       INTEGER REFERENCES sessions(id),
+    bssid            TEXT    NOT NULL,
+    ssid             TEXT,
+    channel          INTEGER,
+    signal_dbm       INTEGER,
+    security         TEXT,
+    encryption       TEXT,
+    beacon_interval  INTEGER,
+    pmf_enabled      INTEGER DEFAULT 0,
+    wps_enabled      INTEGER DEFAULT 0,
+    hidden           INTEGER DEFAULT 0,
+    wsps_score       INTEGER,
+    wsps_grade       TEXT,
+    first_seen       TEXT    NOT NULL,
+    last_seen        TEXT    NOT NULL,
+    UNIQUE(bssid, session_id)
 );
 
--- CVEs for networks (router CVEs)
+-- CVEs for networks, populated on-demand from OUI→NVD lookup (M0 — implemented)
 CREATE TABLE network_cves (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    network_id INTEGER REFERENCES networks(id),
-    cve_id TEXT,
-    cvss_score REAL,
-    cvss_vector TEXT,
-    description TEXT,
-    cisa_kev BOOLEAN DEFAULT FALSE,
-    exploit_available BOOLEAN DEFAULT FALSE,
-    patch_available BOOLEAN DEFAULT FALSE
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    network_id     INTEGER REFERENCES networks(id),
+    cve_id         TEXT    NOT NULL,
+    cvss_score     REAL,
+    epss_score     REAL,
+    kev_listed     INTEGER DEFAULT 0,
+    exploit_score  REAL,
+    description    TEXT,
+    fetched_at     TEXT    NOT NULL
 );
 
--- Devices discovered on network
+-- Devices discovered on network (M1 — planned, table ready but unused)
 CREATE TABLE devices (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT REFERENCES sessions(session_id),
-    ip TEXT,
-    mac TEXT,
-    oui TEXT,
-    hostname TEXT,
-    os_guess TEXT,
-    open_ports TEXT,  -- JSON array
-    services TEXT,    -- JSON object
-    device_type TEXT,
-    manufacturer TEXT,
-    model TEXT,
-    firmware_gen TEXT,
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id             INTEGER REFERENCES sessions(id),
+    network_id             INTEGER REFERENCES networks(id),
+    ip_address             TEXT    NOT NULL,
+    mac_address            TEXT,
+    vendor                 TEXT,
+    open_ports             TEXT,
+    os_guess               TEXT,
+    device_type            TEXT,
     fingerprint_confidence REAL,
-    fingerprint_method TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    first_seen             TEXT    NOT NULL,
+    last_seen              TEXT    NOT NULL
 );
 
--- CVEs for devices (tri-metric scoring)
+-- CVEs for devices, tri-metric scoring (M3 — planned, table ready but unused)
 CREATE TABLE device_cves (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    device_id INTEGER REFERENCES devices(id),
-    cve_id TEXT,
-    cvss_score REAL,
-    epss_score REAL,           -- FIRST.org daily exploitation probability
-    epss_percentile REAL,      -- Relative to all CVEs
-    exploit_score REAL,        -- Tri-metric ExploitScore
-    cisa_kev BOOLEAN DEFAULT FALSE,
-    routersploit_module TEXT,
-    metasploit_module TEXT,
-    priority INTEGER           -- 1=Critical, 2=High, 3=Medium (derived from exploit_score)
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id      INTEGER REFERENCES devices(id),
+    cve_id         TEXT    NOT NULL,
+    cvss_score     REAL,
+    epss_score     REAL,
+    kev_listed     INTEGER DEFAULT 0,
+    exploit_score  REAL,
+    description    TEXT,
+    fetched_at     TEXT    NOT NULL
 );
 
--- Exploit execution results
+-- Exploit execution results (M4 — planned, table ready but unused)
 CREATE TABLE exploit_results (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    device_id INTEGER REFERENCES devices(id),
-    cve_id TEXT,
-    module_used TEXT,
-    result TEXT CHECK(result IN ('SUCCESS','FAIL','ERROR','SKIPPED')),
-    evidence_hash TEXT,  -- SHA256 of captured credential (not plaintext)
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id      INTEGER REFERENCES devices(id),
+    cve_id         TEXT,
+    module_path    TEXT    NOT NULL,
+    authorized_by  TEXT    NOT NULL,
+    authorized_at  TEXT    NOT NULL,
+    result         TEXT,
+    success        INTEGER DEFAULT 0,
+    executed_at    TEXT    NOT NULL
 );
 
--- Fingerprint signature database (synced from S3 via CI/CD)
+-- Protocol fingerprint signatures (M2 — planned, table ready but unused)
 CREATE TABLE fingerprint_signatures (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    protocol TEXT,
-    device_type TEXT,
-    manufacturer TEXT,
-    model TEXT,
-    firmware_gen TEXT,
-    signature_rules TEXT,  -- JSON rule set
-    confidence_threshold REAL,
-    version TEXT,
-    last_updated DATETIME
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id     INTEGER REFERENCES devices(id),
+    protocol      TEXT    NOT NULL,
+    feature_key   TEXT    NOT NULL,
+    feature_value TEXT,
+    confidence    REAL,
+    captured_at   TEXT    NOT NULL
 );
 
--- Behavioral drift log (fingerprint changes across sessions)
+-- Behavioral drift log across sessions (M2 — planned, table ready but unused)
 CREATE TABLE behavioral_drift (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    device_mac TEXT,
-    session_id_prev TEXT,
-    session_id_curr TEXT,
-    drift_type TEXT CHECK(drift_type IN (
-        'FINGERPRINT_CHANGE','WSPS_DROP','NEW_DEVICE',
-        'DEVICE_GONE','CVE_NEW','KEV_MATCH'
-    )),
-    field_changed TEXT,      -- e.g. 'mqtt_topic_pattern', 'wsps_score'
-    value_prev TEXT,
-    value_curr TEXT,
-    delta REAL,              -- For numeric fields
-    severity TEXT CHECK(severity IN ('CRITICAL','HIGH','MEDIUM','INFO')),
-    acknowledged BOOLEAN DEFAULT FALSE,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id        INTEGER REFERENCES devices(id),
+    protocol         TEXT    NOT NULL,
+    baseline_value   TEXT,
+    observed_value   TEXT,
+    drift_score      REAL,
+    flagged          INTEGER DEFAULT 0,
+    detected_at      TEXT    NOT NULL
 );
 
--- Unified alert log
+-- Unified alert log (used today for scan-failure alerts; broader use planned with M1-M4)
 CREATE TABLE alerts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT REFERENCES sessions(session_id),
-    alert_type TEXT,
-    severity TEXT CHECK(severity IN ('CRITICAL','HIGH','MEDIUM','INFO')),
-    device_ip TEXT,
-    cve_id TEXT,
-    description TEXT,
-    sns_sent BOOLEAN DEFAULT FALSE,
-    acknowledged BOOLEAN DEFAULT FALSE,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id    INTEGER REFERENCES sessions(id),
+    severity      TEXT    NOT NULL,
+    category      TEXT    NOT NULL,
+    message       TEXT    NOT NULL,
+    related_id    INTEGER,
+    related_type  TEXT,
+    acknowledged  INTEGER DEFAULT 0,
+    created_at    TEXT    NOT NULL
 );
 ```
 
