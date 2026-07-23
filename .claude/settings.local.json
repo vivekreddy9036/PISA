@@ -62,7 +62,13 @@
       "Bash(rm -rf /tmp/.tmpPLsQsB /tmp/.tmpvIEXRJ)",
       "Bash(echo \"grep exit: $?\")",
       "Bash(xargs -I{} cat {})",
-      "Bash(/usr/bin/pytest tests/ -v)"
+      "Bash(/usr/bin/pytest tests/ -v)",
+      "Bash(dpkg -l)",
+      "Bash(curl -fL \"https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64\" -o vscode.deb --progress-bar)",
+      "Bash(sudo dpkg -i /tmp/claude-1000/-home-vivek-PISA/6a0e850c-2fce-4fac-8ab7-210c24789e18/scratchpad/vscode.deb)",
+      "Bash(sudo -S dpkg -i /tmp/claude-1000/-home-vivek-PISA/6a0e850c-2fce-4fac-8ab7-210c24789e18/scratchpad/vscode.deb)",
+      "Bash(sudo -S apt-get -f install -y)",
+      "Bash(code --version)"
     ]
   }
 }
