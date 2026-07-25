@@ -31,14 +31,14 @@ purposes) and provides:
 - **In scope for v1 (implemented):** passive WiFi beacon capture, WiFi
   Security Posture Scoring (WSPS), OUI-based router vendor identification
   with on-demand CVE correlation via the NVD API, session persistence in
-  SQLite, a browser-based dashboard to trigger scans and view results, and
-  M1 network join + device discovery (join a scored network with its
+  SQLite, a browser-based dashboard to trigger scans and view results, M1
+  network join + device discovery (join a scored network with its
   password, then ARP-sweep and Nmap-scan the joined subnet for live
-  devices).
+  devices), and M3 device CVE correlation via NVD (EPSS/KEV scoring not
+  yet included).
 - **Out of scope for v1 (planned, not in this release):** protocol-level
-  behavioral fingerprinting (M2), CVE correlation for discovered devices
-  (M3), an authorized exploit pipeline (M4), and AWS cloud
-  reporting/storage integration.
+  behavioral fingerprinting (M2), an authorized exploit pipeline (M4), and
+  AWS cloud reporting/storage integration.
 
 ### 1.3 Definitions, Acronyms, Abbreviations
 
@@ -86,9 +86,10 @@ end-state).
 5. On request, join a scored network with its WiFi password and discover
    devices on it (ARP sweep + Nmap port/OS scan), recording IP, MAC,
    vendor, open ports, and OS guess per device.
-6. *(Planned)* Fingerprint discovered devices' protocols, correlate
-   device-specific CVEs, and offer an authorized exploit-verification
-   pipeline.
+6. On request, look up known CVEs for a discovered device from its Nmap OS
+   guess (or OUI vendor as fallback).
+7. *(Planned)* Fingerprint discovered devices' protocols and offer an
+   authorized exploit-verification pipeline.
 
 ### 2.3 User Characteristics
 
@@ -223,7 +224,7 @@ path as FR-3). Results are recorded per device (IP, MAC, vendor, open ports,
 OS guess) against the joined network and session.
 
 Protocol-level behavioral fingerprinting beyond Nmap's OS/service guess
-(FR-8/M2) and device-specific CVE correlation (FR-9/M3) remain planned.
+(FR-8/M2) remains planned; device-specific CVE correlation is FR-9.
 
 *Implementation:* `pisa/m1/wifi_join.py`, `pisa/m1/arp_sweep.py`,
 `pisa/m1/nmap_scan.py`, `pisa/m1/discovery_runner.py`
@@ -236,12 +237,26 @@ device-type confidence score.
 
 *Target implementation:* `pisa/m2/`
 
-#### FR-9: Device CVE Correlation — **[Planned]**
+#### FR-9: Device CVE Correlation — **[Implemented, NVD only]**
 
-The system shall correlate fingerprinted devices against CVE, EPSS, and
-CISA KEV data to produce a prioritized exploitability score.
+The system shall correlate discovered devices against known CVEs, on user
+request (not automatically, matching FR-3's rule). The search keyword
+prefers the device's Nmap `os_guess`, simplified to drop version-specific
+detail (`_simplify_os_guess`: e.g. "Cisco Nexus switch (NX-OS 6.0(2))" ->
+"Cisco Nexus switch" — NVD's `keywordSearch` ANDs every token, so a literal
+version string zeroes out otherwise-relevant results), falling back to
+OUI vendor when no OS guess is available. Reuses the same NVD 2.0 query
+path as FR-3 (`_query_nvd`, extracted as a shared helper).
 
-*Target implementation:* `pisa/m3/`
+EPSS and CISA KEV correlation, and a prioritized exploitability score
+combining them with CVSS, remain planned — `epss_score`/`kev_listed`/
+`exploit_score` columns already exist on `device_cves` (and
+`network_cves`) unused, ready for that.
+
+*Implementation:* `pisa/m0/oui_cve.py` (`lookup_device_cves`,
+`_simplify_os_guess`, `_query_nvd`), `pisa/db/queries.py`
+(`insert_device_cve`, `get_device_cves`), `pisa/m5/routes/api.py`
+(`check_device_cves`)
 
 #### FR-10: Authorized Exploit Verification — **[Planned]**
 
@@ -337,7 +352,7 @@ PDF reports (S3 + Lambda).
 | FR-12 | M0 | Implemented, passive mode |
 | FR-7 | M1 | Implemented |
 | FR-8 | M2 | Planned |
-| FR-9 | M3 | Planned |
+| FR-9 | M3 | Implemented, NVD only |
 | FR-10 | M4 | Planned |
 | FR-11 | AWS | Planned |
 
@@ -348,3 +363,4 @@ PDF reports (S3 + Lambda).
 | 1.0 | 2026-07-20 | Initial SRS, aligned to v1 (M0 + DB + M5) implementation |
 | 1.1 | 2026-07-23 | Added FR-12 (PMKID/EAPOL handshake capture, Sprint 2) |
 | 1.2 | 2026-07-26 | FR-7 (M1 network join + device discovery) implemented; removed Demo Mode |
+| 1.3 | 2026-07-26 | FR-9 (M3 device CVE correlation, NVD only) implemented |
