@@ -62,6 +62,7 @@ def create_tables(conn: sqlite3.Connection) -> None:
         open_ports            TEXT,
         os_guess              TEXT,
         device_type           TEXT,
+        mdns_name             TEXT,
         fingerprint_confidence REAL,
         first_seen            TEXT    NOT NULL,
         last_seen             TEXT    NOT NULL
@@ -127,6 +128,7 @@ def create_tables(conn: sqlite3.Connection) -> None:
     conn.commit()
     _migrate_handshake_columns(conn)
     _migrate_discovery_columns(conn)
+    _migrate_mdns_column(conn)
 
 
 def _migrate_handshake_columns(conn: sqlite3.Connection) -> None:
@@ -141,6 +143,14 @@ def _migrate_handshake_columns(conn: sqlite3.Connection) -> None:
     for column, ddl in migrations.items():
         if column not in existing:
             conn.execute(ddl)
+    conn.commit()
+
+
+def _migrate_mdns_column(conn: sqlite3.Connection) -> None:
+    """Add mdns_name to devices for DBs created before mDNS identification."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(devices)")}
+    if "mdns_name" not in existing:
+        conn.execute("ALTER TABLE devices ADD COLUMN mdns_name TEXT")
     conn.commit()
 
 

@@ -1,6 +1,6 @@
 from pisa.db import queries
 from pisa.db.connection import get_connection
-from pisa.m1 import arp_sweep, discovery_runner, nmap_scan, wifi_join
+from pisa.m1 import arp_sweep, discovery_runner, mdns_discover, nmap_scan, wifi_join
 
 
 def test_run_discovery_persists_devices_on_success(db, monkeypatch):
@@ -13,6 +13,10 @@ def test_run_discovery_persists_devices_on_success(db, monkeypatch):
         lambda iface, **kw: [{"ip": "192.168.1.10", "mac": "AA:BB:CC:DD:EE:FF"}],
     )
     monkeypatch.setattr(nmap_scan, "scan_host", lambda ip, **kw: {"open_ports": [{"port": 80, "service": "http"}], "os_guess": "Linux"})
+    monkeypatch.setattr(
+        mdns_discover, "identify_hosts",
+        lambda target_ips, **kw: {"192.168.1.10": {"name": "sumana's MacBook Air", "device_type": "Apple device (AirPlay)"}},
+    )
 
     with get_connection(db) as conn:
         session_id = queries.create_session(conn)
@@ -28,6 +32,8 @@ def test_run_discovery_persists_devices_on_success(db, monkeypatch):
     assert len(devices) == 1
     assert devices[0]["ip_address"] == "192.168.1.10"
     assert devices[0]["vendor"]  # oui_cve.bssid_to_vendor ran, unknown or not
+    assert devices[0]["mdns_name"] == "sumana's MacBook Air"
+    assert devices[0]["device_type"] == "Apple device (AirPlay)"
 
 
 def test_run_discovery_marks_error_when_join_fails(db, monkeypatch):

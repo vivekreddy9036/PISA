@@ -4,7 +4,7 @@ import config
 from pisa.db import queries
 from pisa.db.connection import get_connection
 from pisa.m0 import oui_cve
-from pisa.m1 import arp_sweep, nmap_scan, wifi_join
+from pisa.m1 import arp_sweep, mdns_discover, nmap_scan, wifi_join
 
 
 def run_discovery(
@@ -35,9 +35,11 @@ def run_discovery(
 
     try:
         hosts = arp_sweep.scan_subnet(iface)
+        mdns_by_ip = mdns_discover.identify_hosts({h["ip"] for h in hosts})
         for host in hosts:
             vendor = oui_cve.bssid_to_vendor(host["mac"])
             nmap_result = nmap_scan.scan_host(host["ip"])
+            mdns_info = mdns_by_ip.get(host["ip"], {})
             with get_connection(db_path) as conn:
                 queries.insert_device(conn, session_id, network_id, {
                     "ip_address": host["ip"],
@@ -45,6 +47,8 @@ def run_discovery(
                     "vendor": vendor,
                     "open_ports": json.dumps(nmap_result["open_ports"]),
                     "os_guess": nmap_result["os_guess"],
+                    "mdns_name": mdns_info.get("name"),
+                    "device_type": mdns_info.get("device_type"),
                 })
     except Exception as e:
         with get_connection(db_path) as conn:

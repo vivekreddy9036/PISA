@@ -55,7 +55,7 @@
 <div id="devices-panel" class="devices-panel" style="display:none;">
   <h3>Devices</h3>
   <table id="devices-table">
-    <thead><tr><th>IP</th><th>MAC</th><th>Vendor</th><th>Open Ports</th><th>OS Guess</th><th>CVEs</th></tr></thead>
+    <thead><tr><th>IP</th><th>MAC</th><th>Vendor</th><th>Name</th><th>Type</th><th>Open Ports</th><th>OS Guess</th><th>CVEs</th></tr></thead>
     <tbody></tbody>
   </table>
 </div>
@@ -125,7 +125,7 @@ function renderDevices(devices) {
       ports = JSON.parse(d.open_ports || '[]').map((p) => p.port + '/' + (p.service || '?')).join(', ');
     } catch (e) { /* leave blank if unparsable */ }
     const tr = document.createElement('tr');
-    [d.ip_address, d.mac_address || '', d.vendor || '', ports, d.os_guess || ''].forEach((val) => {
+    [d.ip_address, d.mac_address || '', d.vendor || '', d.mdns_name || '', d.device_type || '', ports, d.os_guess || ''].forEach((val) => {
       const td = document.createElement('td');
       td.textContent = val;
       tr.appendChild(td);

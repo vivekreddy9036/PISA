@@ -82,8 +82,8 @@ def insert_device(conn: sqlite3.Connection, session_id: int, network_id: int, da
         """
         INSERT INTO devices
             (session_id, network_id, ip_address, mac_address, vendor, open_ports,
-             os_guess, device_type, fingerprint_confidence, first_seen, last_seen)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             os_guess, device_type, mdns_name, fingerprint_confidence, first_seen, last_seen)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             session_id,
@@ -94,6 +94,7 @@ def insert_device(conn: sqlite3.Connection, session_id: int, network_id: int, da
             data.get("open_ports"),
             data.get("os_guess"),
             data.get("device_type"),
+            data.get("mdns_name"),
             data.get("fingerprint_confidence"),
             now,
             now,

@@ -160,6 +160,22 @@ def test_insert_and_get_devices_for_network(db):
     assert devices[0]["ip_address"] == "192.168.1.10"
 
 
+def test_insert_device_stores_mdns_name_and_device_type(db):
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, _network_data())
+        queries.insert_device(conn, session_id, network_id, {
+            "ip_address": "192.168.1.10",
+            "mdns_name": "sumana's MacBook Air",
+            "device_type": "Apple device (AirPlay)",
+        })
+
+        devices = queries.get_devices_for_network(conn, network_id)
+
+    assert devices[0]["mdns_name"] == "sumana's MacBook Air"
+    assert devices[0]["device_type"] == "Apple device (AirPlay)"
+
+
 def test_get_device_by_id(db):
     with get_connection(db) as conn:
         session_id = queries.create_session(conn)
