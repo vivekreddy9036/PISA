@@ -33,6 +33,10 @@ def create_tables(conn: sqlite3.Connection) -> None:
         handshake_type        TEXT,
         handshake_path        TEXT,
         handshake_captured_at TEXT,
+        discovery_status         TEXT,
+        discovery_started_at     TEXT,
+        discovery_completed_at   TEXT,
+        discovery_error          TEXT,
         UNIQUE(bssid, session_id)
     );
 
@@ -122,6 +126,7 @@ def create_tables(conn: sqlite3.Connection) -> None:
     """)
     conn.commit()
     _migrate_handshake_columns(conn)
+    _migrate_discovery_columns(conn)
 
 
 def _migrate_handshake_columns(conn: sqlite3.Connection) -> None:
@@ -132,6 +137,21 @@ def _migrate_handshake_columns(conn: sqlite3.Connection) -> None:
         "handshake_type": "ALTER TABLE networks ADD COLUMN handshake_type TEXT",
         "handshake_path": "ALTER TABLE networks ADD COLUMN handshake_path TEXT",
         "handshake_captured_at": "ALTER TABLE networks ADD COLUMN handshake_captured_at TEXT",
+    }
+    for column, ddl in migrations.items():
+        if column not in existing:
+            conn.execute(ddl)
+    conn.commit()
+
+
+def _migrate_discovery_columns(conn: sqlite3.Connection) -> None:
+    """Add discovery_* columns to networks for DBs created before M1."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(networks)")}
+    migrations = {
+        "discovery_status": "ALTER TABLE networks ADD COLUMN discovery_status TEXT",
+        "discovery_started_at": "ALTER TABLE networks ADD COLUMN discovery_started_at TEXT",
+        "discovery_completed_at": "ALTER TABLE networks ADD COLUMN discovery_completed_at TEXT",
+        "discovery_error": "ALTER TABLE networks ADD COLUMN discovery_error TEXT",
     }
     for column, ddl in migrations.items():
         if column not in existing:

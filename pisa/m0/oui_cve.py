@@ -7,8 +7,14 @@ _OUI_DB: dict[str, str] = {}
 
 
 def _load_oui_db() -> None:
-    if _OUI_DB or not os.path.exists(_OUI_FILE):
+    if _OUI_DB:
         return
+    if not os.path.exists(_OUI_FILE):
+        try:
+            download_oui_db()
+        except Exception as e:
+            print(f"[OUI] Could not download OUI database: {e}")
+            return
     with open(_OUI_FILE, "r", errors="ignore") as f:
         for line in f:
             if "(hex)" in line:
@@ -24,7 +30,10 @@ def download_oui_db() -> None:
         return
     url = "https://standards-oui.ieee.org/oui/oui.txt"
     print("[OUI] Downloading IEEE OUI database...")
-    resp = requests.get(url, timeout=30)
+    # IEEE's server 418s requests' default "python-requests/x.x" User-Agent —
+    # a normal browser-style one gets through.
+    headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) PISA-OUI-Fetcher"}
+    resp = requests.get(url, headers=headers, timeout=30)
     resp.raise_for_status()
     with open(_OUI_FILE, "w", errors="ignore") as f:
         f.write(resp.text)

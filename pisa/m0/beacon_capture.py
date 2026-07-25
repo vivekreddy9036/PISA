@@ -1,9 +1,23 @@
+import subprocess
+
 from scapy.all import Dot11, Dot11Beacon, Dot11Elt, RadioTap, sniff
 
 import config
 from pisa.db import queries
 from pisa.db.connection import get_connection
 from pisa.m0.wsps import score_network
+
+
+def _set_channel(iface: str, channel: int) -> None:
+    try:
+        proc = subprocess.run(
+            ["iw", "dev", iface, "set", "channel", str(channel)],
+            capture_output=True, text=True,
+        )
+        if proc.returncode != 0:
+            print(f"[M0-HOP] iw set channel {channel} on {iface} failed: {proc.stderr.strip()}")
+    except Exception as e:
+        print(f"[M0-HOP] iw set channel {channel} on {iface} raised: {e}")
 
 
 def _detect_security(pkt) -> tuple[str, bool, bool]:
@@ -97,7 +111,7 @@ def _parse_beacon(pkt) -> dict | None:
 
 
 def score_and_store(conn, session_id: int, data: dict) -> dict:
-    """Score a parsed network dict with WSPS and persist it. Shared by real and demo capture paths."""
+    """Score a parsed network dict with WSPS and persist it."""
     score, grade = score_network(data)
     data["wsps_score"] = score
     data["wsps_grade"] = grade
@@ -130,11 +144,26 @@ def start_capture(
         with get_connection(db_path) as conn:
             score_and_store(conn, session_id, data)
 
-    sniff(
-        iface=iface,
-        prn=handler,
-        store=0,
-        timeout=timeout,
-        lfilter=lambda p: p.haslayer(Dot11Beacon),
-    )
+    # Sweep channels in sequential bursts rather than hopping in a background
+    # thread underneath one long-lived sniff() socket: switching bands
+    # (2.4GHz <-> 5GHz) can bounce the link on some adapters, and scapy's
+    # socket doesn't recover from that mid-sniff — it just dies silently,
+    # aborting the whole capture. Opening a fresh socket per channel avoids
+    # ever mutating the channel while a socket is actively listening.
+    channels = config.SCAN_CHANNELS
+    dwell = max(timeout / len(channels), 0.5)
+    remaining = timeout
+    for channel in channels:
+        if remaining <= 0:
+            break
+        _set_channel(iface, channel)
+        burst = min(dwell, remaining)
+        sniff(
+            iface=iface,
+            prn=handler,
+            store=0,
+            timeout=burst,
+            lfilter=lambda p: p.haslayer(Dot11Beacon),
+        )
+        remaining -= burst
     return list(seen.values())

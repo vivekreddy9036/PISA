@@ -10,10 +10,6 @@
     <label>Duration (s)
       <input type="number" name="duration" value="{{ default_duration }}" min="1">
     </label>
-    <label class="checkbox-label">
-      <input type="checkbox" name="demo" checked>
-      Demo Mode (no monitor-mode adapter required)
-    </label>
     <button type="submit">Start Scan</button>
   </form>
   <p id="scan-status"></p>
@@ -49,7 +45,6 @@ document.getElementById('scan-form').addEventListener('submit', async (e) => {
   const body = {
     iface: form.iface.value,
     duration: parseInt(form.duration.value, 10),
-    demo: form.demo.checked,
   };
   const statusEl = document.getElementById('scan-status');
   const res = await fetch('/api/scan', {

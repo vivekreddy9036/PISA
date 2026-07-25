@@ -103,3 +103,58 @@ def test_insert_alert(db):
         session_id = queries.create_session(conn)
         alert_id = queries.insert_alert(conn, session_id, "error", "scan", "Scan failed: boom")
         assert alert_id is not None
+
+
+def test_get_network_by_id(db):
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, _network_data())
+
+        network = queries.get_network_by_id(conn, network_id)
+        assert network["id"] == network_id
+
+        assert queries.get_network_by_id(conn, 999) is None
+
+
+def test_discovery_lifecycle(db):
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, _network_data())
+
+        queries.mark_discovery_running(conn, network_id)
+        network = queries.get_network_by_id(conn, network_id)
+        assert network["discovery_status"] == "running"
+        assert network["discovery_started_at"] is not None
+
+        queries.mark_discovery_done(conn, network_id)
+        network = queries.get_network_by_id(conn, network_id)
+        assert network["discovery_status"] == "done"
+        assert network["discovery_completed_at"] is not None
+
+
+def test_mark_discovery_error(db):
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, _network_data())
+
+        queries.mark_discovery_error(conn, network_id, "join failed")
+        network = queries.get_network_by_id(conn, network_id)
+
+    assert network["discovery_status"] == "error"
+    assert network["discovery_error"] == "join failed"
+
+
+def test_insert_and_get_devices_for_network(db):
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, _network_data())
+        queries.insert_device(conn, session_id, network_id, {
+            "ip_address": "192.168.1.10",
+            "mac_address": "AA:BB:CC:DD:EE:FF",
+            "vendor": "TestVendor",
+        })
+
+        devices = queries.get_devices_for_network(conn, network_id)
+
+    assert len(devices) == 1
+    assert devices[0]["ip_address"] == "192.168.1.10"

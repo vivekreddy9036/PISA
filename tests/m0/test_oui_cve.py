@@ -39,13 +39,25 @@ def test_bssid_to_vendor_parses_oui_file():
     assert "TP-LINK" in vendor
 
 
-def test_bssid_to_vendor_unknown_without_file():
-    vendor = oui_cve.bssid_to_vendor("AA:BB:CC:00:00:01")
+def test_bssid_to_vendor_unknown_without_file_and_download_failing():
+    with patch("pisa.m0.oui_cve.requests.get", side_effect=Exception("network down")):
+        vendor = oui_cve.bssid_to_vendor("AA:BB:CC:00:00:01")
     assert vendor == "Unknown"
 
 
+def test_bssid_to_vendor_downloads_db_when_missing():
+    mock_resp = MagicMock()
+    mock_resp.text = "00-50-F2   (hex)\tTP-LINK TECHNOLOGIES CO.,LTD.\n"
+    mock_resp.raise_for_status = MagicMock()
+    with patch("pisa.m0.oui_cve.requests.get", return_value=mock_resp) as mock_get:
+        vendor = oui_cve.bssid_to_vendor("00:50:F2:AA:BB:CC")
+    mock_get.assert_called_once()
+    assert "TP-LINK" in vendor
+
+
 def test_lookup_cves_returns_empty_for_unknown_vendor():
-    cves = oui_cve.lookup_cves("AA:BB:CC:00:00:01")
+    with patch("pisa.m0.oui_cve.requests.get", side_effect=Exception("network down")):
+        cves = oui_cve.lookup_cves("AA:BB:CC:00:00:01")
     assert cves == []
 
 

@@ -75,13 +75,7 @@ form label {
   color: var(--muted);
 }
 
-form .checkbox-label {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-input[type="text"], input[type="number"] {
+input[type="text"], input[type="number"], input[type="password"] {
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
@@ -149,3 +143,7 @@ th, td {
 .session-meta { color: var(--muted); }
 
 .cve-cell ul { margin: 0; padding-left: 1.1rem; }
+
+.join-form { display: flex; gap: 0.4rem; align-items: center; }
+.discovery-error { color: #e0554f; font-size: 0.85rem; }
+.devices-panel { margin-top: 1rem; }

@@ -31,11 +31,14 @@ purposes) and provides:
 - **In scope for v1 (implemented):** passive WiFi beacon capture, WiFi
   Security Posture Scoring (WSPS), OUI-based router vendor identification
   with on-demand CVE correlation via the NVD API, session persistence in
-  SQLite, and a browser-based dashboard to trigger scans and view results.
-- **Out of scope for v1 (planned, not in this release):** IoT device
-  discovery on the network (M1), protocol-level behavioral fingerprinting
-  (M2), CVE correlation for discovered devices (M3), an authorized exploit
-  pipeline (M4), and AWS cloud reporting/storage integration.
+  SQLite, a browser-based dashboard to trigger scans and view results, and
+  M1 network join + device discovery (join a scored network with its
+  password, then ARP-sweep and Nmap-scan the joined subnet for live
+  devices).
+- **Out of scope for v1 (planned, not in this release):** protocol-level
+  behavioral fingerprinting (M2), CVE correlation for discovered devices
+  (M3), an authorized exploit pipeline (M4), and AWS cloud
+  reporting/storage integration.
 
 ### 1.3 Definitions, Acronyms, Abbreviations
 
@@ -47,7 +50,6 @@ purposes) and provides:
 | PMF | Protected Management Frames (802.11w) |
 | CVE | Common Vulnerabilities and Exposures |
 | NVD | National Vulnerability Database (NIST) |
-| Demo Mode | A local-only mode that generates synthetic scan data so the dashboard can be exercised without monitor-mode WiFi hardware |
 
 ### 1.4 References
 
@@ -75,16 +77,18 @@ end-state).
 
 ### 2.2 Product Functions (summary)
 
-1. Capture WiFi beacon frames from a monitor-mode interface (or generate
-   synthetic data in Demo Mode).
+1. Capture WiFi beacon frames from a monitor-mode interface.
 2. Score each discovered network's security posture (WSPS) and assign a
    letter grade.
 3. Identify a network's access-point vendor from its BSSID and, on request,
    look up known CVEs for that vendor.
 4. Persist scan sessions and results, and present them in a dashboard.
-5. *(Planned)* Discover IoT devices on the assessed network, fingerprint
-   their protocols, correlate device-specific CVEs, and offer an authorized
-   exploit-verification pipeline.
+5. On request, join a scored network with its WiFi password and discover
+   devices on it (ARP sweep + Nmap port/OS scan), recording IP, MAC,
+   vendor, open ports, and OS guess per device.
+6. *(Planned)* Fingerprint discovered devices' protocols, correlate
+   device-specific CVEs, and offer an authorized exploit-verification
+   pipeline.
 
 ### 2.3 User Characteristics
 
@@ -95,7 +99,11 @@ types, WPS) but not necessarily with packet-level protocol details.
 
 ### 2.4 Constraints
 
-- Passive-only capture in v1 — no active association or packet injection.
+- WiFi beacon capture (M0) is passive-only — no active association or
+  packet injection. M1 network join is the one deliberate, explicit,
+  user-initiated exception: it actively associates to a target network
+  with a supplied password to enable device discovery. It still never
+  performs packet injection or deauthentication.
 - No ML/DL, blockchain, or dataset-trained components (project constraint).
 - Must run on Raspberry Pi 4 class hardware — lightweight, no heavy JS
   frontend framework, no external CDN dependency (field deployment may lack
@@ -106,8 +114,10 @@ types, WPS) but not necessarily with packet-level protocol details.
 
 ### 2.5 Assumptions and Dependencies
 
-- A monitor-mode-capable WiFi adapter is assumed for real captures; Demo
-  Mode removes this dependency for development and demonstration.
+- A monitor-mode-capable WiFi adapter is required for beacon capture (M0).
+- M1 network join assumes a second, managed-mode WiFi radio distinct from
+  the monitor-mode adapter (dual-radio hardware — e.g. a Raspberry Pi's
+  built-in adapter for joining, plus an external adapter for capture).
 - Live CVE lookups depend on the NVD 2.0 REST API being reachable and its
   (currently generous but rate-limited) unauthenticated request quota.
 
@@ -158,22 +168,24 @@ discovered during that session, associated with the session.
 
 *Implementation:* `pisa/db/models.py`, `pisa/db/queries.py`, `pisa/m0/scan_runner.py`
 
-#### FR-5: Demo Mode — **[Implemented]**
+#### FR-5: Demo Mode — **[Removed, v1.2]**
 
-The system shall provide a mode that generates synthetic, realistic network
-data through the same scoring and persistence path as a real capture, for
-development and demonstration without requiring monitor-mode hardware. This
-mode is for local development/testing use, not for presenting synthetic
-results as live captures.
-
-*Implementation:* `pisa/m0/demo_data.py`, `pisa/m0/scan_runner.py`
+Originally provided a mode that generated synthetic network data through
+the same scoring/persistence path as a real capture, for development
+without monitor-mode hardware. Removed in v1.2: PISA is a real-time
+assessment tool operating against live hardware and live networks only, and
+a synthetic-data path risked being mistaken for a live capture. Test
+coverage for the scan/CVE code paths now mocks the real capture/lookup
+functions directly (see `tests/m5/test_routes.py`) instead of relying on a
+product-facing demo feature.
 
 #### FR-6: Dashboard — **[Implemented]**
 
 The system shall provide a web dashboard that: lists past scan sessions;
-allows starting a new scan (interface, duration, demo toggle); shows
-per-session network results with WSPS grade badges; and allows triggering an
-on-demand CVE lookup per network.
+allows starting a new scan (interface, duration); shows per-session network
+results with WSPS grade badges; allows triggering an on-demand CVE lookup
+per network; and, per network, allows joining it with its WiFi password and
+viewing the devices discovered on it (FR-7).
 
 *Implementation:* `pisa/m5/`
 
@@ -198,12 +210,23 @@ in-place for pre-existing databases).
 (`_migrate_handshake_columns`), `pisa/db/queries.py`
 (`mark_handshake_captured`, `find_network_by_bssid`)
 
-#### FR-7: IoT Device Discovery — **[Planned]**
+#### FR-7: IoT Device Discovery — **[Implemented]**
 
-The system shall discover devices on the assessed network (ARP sweep, port
-scan) and record IP, MAC, vendor, open ports, and OS guess.
+The system shall join a scored network on request, given its WiFi password,
+via a managed-mode interface distinct from the monitor-mode capture
+interface (`config.JOIN_IFACE`), then discover devices on the joined subnet:
+an ARP sweep for live hosts, followed by an Nmap `-sV -O` scan restricted to
+common IoT-relevant ports (MQTT 1883, CoAP 5683, Modbus 502, RTSP 554, plus
+common web/mgmt/remote-access ports) for open ports, service names, and an
+OS guess per host. Vendor is resolved from each host's MAC OUI (same lookup
+path as FR-3). Results are recorded per device (IP, MAC, vendor, open ports,
+OS guess) against the joined network and session.
 
-*Target implementation:* `pisa/m1/`
+Protocol-level behavioral fingerprinting beyond Nmap's OS/service guess
+(FR-8/M2) and device-specific CVE correlation (FR-9/M3) remain planned.
+
+*Implementation:* `pisa/m1/wifi_join.py`, `pisa/m1/arp_sweep.py`,
+`pisa/m1/nmap_scan.py`, `pisa/m1/discovery_runner.py`
 
 #### FR-8: Protocol Behavioral Fingerprinting — **[Planned]**
 
@@ -239,8 +262,8 @@ PDF reports (S3 + Lambda).
 
 #### 3.2.1 Hardware Interfaces
 
-- WiFi adapter supporting monitor mode (real capture; not required in Demo
-  Mode).
+- WiFi adapter supporting monitor mode, for beacon capture (FR-1).
+- A second WiFi radio in managed mode, for M1 network join (FR-7).
 - *(Planned, future hardware phase)* GPS module, touchscreen display.
 
 #### 3.2.2 Software Interfaces
@@ -257,8 +280,8 @@ PDF reports (S3 + Lambda).
 
 - Browser-based dashboard served by the Flask app (`pisa/m5/`), self-styled
   with no external CDN dependency.
-- CLI flags on `run.py` (`--scan`, `--demo`, `--duration`, `--iface`) for
-  headless operation.
+- CLI flags on `run.py` (`--scan`, `--duration`, `--iface`,
+  `--join-network`, `--password`, `--join-iface`) for headless operation.
 
 ### 3.3 Non-Functional Requirements
 
@@ -274,26 +297,27 @@ PDF reports (S3 + Lambda).
 
 ### 3.4 Use Cases
 
-**UC-1: Run a demo scan (no hardware)**
-1. User opens the dashboard, checks "Demo Mode," sets a duration, clicks
-   "Start Scan."
-2. System creates a session, generates synthetic networks scored through
-   the real WSPS pipeline, and marks the session `done`.
-3. User is taken to the session detail page and sees graded networks.
-4. User clicks "Check CVEs" on a network row and sees canned CVE data.
-
-**UC-2: Run a real WiFi assessment**
+**UC-1: Run a real WiFi assessment**
 1. User places a monitor-mode-capable adapter into monitor mode.
-2. User starts a scan from the dashboard (Demo Mode unchecked, interface
-   name set) or via `python run.py --scan --iface <iface> --duration 30`.
-3. System captures beacons for the configured duration, scores each network,
-   and persists results.
+2. User starts a scan from the dashboard (interface name set) or via
+   `python run.py --scan --iface <iface> --duration 30`.
+3. System sweeps `config.SCAN_CHANNELS`, capturing beacons per channel for
+   the configured duration, scores each network, and persists results.
 4. User reviews graded networks and, per network of interest, triggers a
    live NVD CVE lookup for the access point's vendor.
 
+**UC-2: Join a network and discover its devices**
+1. Following UC-1, user enters a scored network's real WiFi password and
+   clicks "Join & Discover Devices" (or runs
+   `python run.py --join-network <ssid> --password <pw>` headlessly).
+2. System joins the network via `nmcli` on `config.JOIN_IFACE`, ARP-sweeps
+   the joined subnet, and Nmap-scans each live host for open ports/OS.
+3. User reviews the discovered devices (IP, MAC, vendor, open ports, OS
+   guess) on the session detail page.
+
 **UC-3 *(Planned)*: Full network + device assessment**
-1. Following UC-2, the system additionally discovers devices on the
-   network, fingerprints their protocols, and correlates device CVEs.
+1. Following UC-2, the system additionally fingerprints devices' protocols
+   and correlates device-specific CVEs.
 2. Under explicit authorization, the system verifies exploitability for a
    selected high-priority CVE and logs the outcome.
 
@@ -307,10 +331,11 @@ PDF reports (S3 + Lambda).
 |---|---|---|
 | FR-1, FR-2 | M0 | Implemented |
 | FR-3 | M0 | Implemented |
-| FR-4, FR-5 | DB / M0 | Implemented |
+| FR-4 | DB / M0 | Implemented |
+| FR-5 | — | Removed, v1.2 |
 | FR-6 | M5 | Implemented |
 | FR-12 | M0 | Implemented, passive mode |
-| FR-7 | M1 | Planned |
+| FR-7 | M1 | Implemented |
 | FR-8 | M2 | Planned |
 | FR-9 | M3 | Planned |
 | FR-10 | M4 | Planned |
@@ -322,3 +347,4 @@ PDF reports (S3 + Lambda).
 |---|---|---|
 | 1.0 | 2026-07-20 | Initial SRS, aligned to v1 (M0 + DB + M5) implementation |
 | 1.1 | 2026-07-23 | Added FR-12 (PMKID/EAPOL handshake capture, Sprint 2) |
+| 1.2 | 2026-07-26 | FR-7 (M1 network join + device discovery) implemented; removed Demo Mode |

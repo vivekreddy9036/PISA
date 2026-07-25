@@ -83,6 +83,34 @@ def test_parse_beacon_visible_ssid():
     assert data["bssid"] == "AA:BB:CC:00:00:06"
 
 
+def test_start_capture_sweeps_all_configured_channels(db, monkeypatch):
+    seen_channels = []
+    monkeypatch.setattr(beacon_capture, "_set_channel", lambda iface, channel: seen_channels.append(channel))
+    monkeypatch.setattr(beacon_capture, "sniff", lambda **kw: None)
+
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+
+    timeout = 0.5 * len(beacon_capture.config.SCAN_CHANNELS)
+    beacon_capture.start_capture(session_id, db_path=db, iface="wlan1test", timeout=timeout)
+
+    assert seen_channels == beacon_capture.config.SCAN_CHANNELS
+
+
+def test_start_capture_stops_sweeping_once_timeout_exhausted(db, monkeypatch):
+    seen_channels = []
+    monkeypatch.setattr(beacon_capture, "_set_channel", lambda iface, channel: seen_channels.append(channel))
+    monkeypatch.setattr(beacon_capture, "sniff", lambda **kw: None)
+
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+
+    beacon_capture.start_capture(session_id, db_path=db, iface="wlan1test", timeout=1)
+
+    # dwell floor is 0.5s/channel, so a 1s budget only covers 2 channels
+    assert seen_channels == beacon_capture.config.SCAN_CHANNELS[:2]
+
+
 def test_start_capture_persists_scored_networks(db, monkeypatch):
     pkt = _build_beacon(
         "AA:BB:CC:00:00:10",

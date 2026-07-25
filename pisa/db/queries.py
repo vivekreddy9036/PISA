@@ -185,6 +185,45 @@ def get_devices(conn: sqlite3.Connection, session_id: int) -> list:
     return [dict(r) for r in c.fetchall()]
 
 
+def get_devices_for_network(conn: sqlite3.Connection, network_id: int) -> list:
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT * FROM devices WHERE network_id = ?", (network_id,))
+    return [dict(r) for r in c.fetchall()]
+
+
+def get_network_by_id(conn: sqlite3.Connection, network_id: int) -> dict | None:
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT * FROM networks WHERE id = ?", (network_id,))
+    row = c.fetchone()
+    return dict(row) if row else None
+
+
+def mark_discovery_running(conn: sqlite3.Connection, network_id: int) -> None:
+    conn.execute(
+        "UPDATE networks SET discovery_status = 'running', discovery_started_at = ?, discovery_error = NULL WHERE id = ?",
+        (_now(), network_id),
+    )
+    conn.commit()
+
+
+def mark_discovery_done(conn: sqlite3.Connection, network_id: int) -> None:
+    conn.execute(
+        "UPDATE networks SET discovery_status = 'done', discovery_completed_at = ? WHERE id = ?",
+        (_now(), network_id),
+    )
+    conn.commit()
+
+
+def mark_discovery_error(conn: sqlite3.Connection, network_id: int, message: str) -> None:
+    conn.execute(
+        "UPDATE networks SET discovery_status = 'error', discovery_completed_at = ?, discovery_error = ? WHERE id = ?",
+        (_now(), message, network_id),
+    )
+    conn.commit()
+
+
 def find_network_by_bssid(conn: sqlite3.Connection, session_id: int, bssid: str) -> int | None:
     c = conn.cursor()
     c.execute(
