@@ -220,14 +220,21 @@ an ARP sweep for live hosts, followed by an Nmap `-sV -O` scan restricted to
 common IoT-relevant ports (MQTT 1883, CoAP 5683, Modbus 502, RTSP 554, plus
 common web/mgmt/remote-access ports) for open ports, service names, and an
 OS guess per host. Vendor is resolved from each host's MAC OUI (same lookup
-path as FR-3). Results are recorded per device (IP, MAC, vendor, open ports,
-OS guess) against the joined network and session.
+path as FR-3). Each host is also queried over mDNS (DNS-SD,
+`224.0.0.251:5353`) for a self-announced friendly instance name and
+advertised service types, mapped to a human-readable device-type label —
+added after reverse DNS was tried and confirmed non-functional on the
+actual target network, while mDNS was confirmed to work (resolves real
+device names independent of the network's own DNS infrastructure). Results
+are recorded per device (IP, MAC, vendor, open ports, OS guess, mDNS name,
+device type) against the joined network and session.
 
 Protocol-level behavioral fingerprinting beyond Nmap's OS/service guess
 (FR-8/M2) remains planned; device-specific CVE correlation is FR-9.
 
 *Implementation:* `pisa/m1/wifi_join.py`, `pisa/m1/arp_sweep.py`,
-`pisa/m1/nmap_scan.py`, `pisa/m1/discovery_runner.py`
+`pisa/m1/nmap_scan.py`, `pisa/m1/mdns_discover.py`,
+`pisa/m1/discovery_runner.py`
 
 #### FR-8: Protocol Behavioral Fingerprinting — **[Planned]**
 
@@ -364,3 +371,4 @@ PDF reports (S3 + Lambda).
 | 1.1 | 2026-07-23 | Added FR-12 (PMKID/EAPOL handshake capture, Sprint 2) |
 | 1.2 | 2026-07-26 | FR-7 (M1 network join + device discovery) implemented; removed Demo Mode |
 | 1.3 | 2026-07-26 | FR-9 (M3 device CVE correlation, NVD only) implemented |
+| 1.4 | 2026-07-26 | FR-7 extended with mDNS device identification |
