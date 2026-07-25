@@ -20,6 +20,7 @@ def main() -> None:
     parser.add_argument("--join-network", metavar="SSID", help="Join this SSID and run device discovery, headlessly")
     parser.add_argument("--password", default="", help="Password for --join-network")
     parser.add_argument("--join-iface", default=config.JOIN_IFACE, help="Managed-mode interface used to join the network")
+    parser.add_argument("--host", default=config.FLASK_HOST, help="Dashboard bind address (default: loopback-only, no auth on the API)")
     args = parser.parse_args()
 
     init_db()
@@ -48,8 +49,15 @@ def main() -> None:
         return
 
     app = create_app()
-    print(f"[PISA] Listening on http://{config.FLASK_HOST}:{config.FLASK_PORT}")
-    app.run(host=config.FLASK_HOST, port=config.FLASK_PORT, debug=config.FLASK_DEBUG)
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        print(
+            f"[PISA] WARNING: binding to {args.host} exposes the dashboard to your "
+            "network. There is no authentication on its API — anyone reachable "
+            "can trigger scans or join networks with a supplied password. Only "
+            "do this on a trusted network."
+        )
+    print(f"[PISA] Listening on http://{args.host}:{config.FLASK_PORT}")
+    app.run(host=args.host, port=config.FLASK_PORT, debug=config.FLASK_DEBUG)
 
 
 if __name__ == "__main__":

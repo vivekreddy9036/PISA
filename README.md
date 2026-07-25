@@ -64,7 +64,17 @@ python run.py --join-network "SomeSSID" --password "..." --join-iface wlan0
 CLI flags: `--scan` (run one beacon scan and exit, no server), `--duration`
 (seconds, default 30), `--iface` (monitor-mode interface, default
 `config.WIFI_IFACE`), `--join-network`/`--password`/`--join-iface` (join a
-network and run device discovery headlessly, default `config.JOIN_IFACE`).
+network and run device discovery headlessly, default `config.JOIN_IFACE`),
+`--host` (dashboard bind address, see below).
+
+### Dashboard exposure
+
+The dashboard binds to `127.0.0.1` by default — its API has no
+authentication, and its endpoints accept WiFi passwords and trigger real
+network actions, so it isn't exposed by default. To view it from another
+device (e.g. a laptop while PISA runs headless on a field Pi), explicitly
+opt in with `--host 0.0.0.0` or `PISA_HOST=0.0.0.0 python run.py`, and only
+do so on a network you trust.
 
 ### Running tests
 
@@ -81,8 +91,9 @@ This is the same command CI (`.github/workflows/test.yml`) runs.
 pisa/
   db/       — SQLite schema + query helpers
   m0/       — WiFi beacon capture, WSPS scoring, OUI→CVE correlation (implemented)
-  m1-m4/    — device discovery, protocol fingerprinting, CVE correlation,
-              exploit pipeline (planned, not yet implemented)
+  m1/       — network join + device discovery: ARP sweep, Nmap port/OS scan (implemented)
+  m2-m4/    — protocol fingerprinting, device CVE correlation, exploit
+              pipeline (planned, not yet implemented)
   m5/       — Flask dashboard (implemented)
   aws/      — cloud integration (planned)
 docs/       — full project documentation, SRS, literature survey

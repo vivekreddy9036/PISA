@@ -3,7 +3,13 @@ import os
 WIFI_IFACE = "wlx00c0cab96bf1"
 SCAN_DEFAULT_DURATION = 30
 DB_PATH = os.path.join(os.path.dirname(__file__), "pisa.db")
-FLASK_HOST = "0.0.0.0"
+# Loopback by default: the dashboard's API has no authentication, and its
+# endpoints accept WiFi passwords and trigger real network actions (join,
+# scan, device discovery) — binding to all interfaces by default would let
+# anyone on the same network segment drive the tool. Set PISA_HOST=0.0.0.0
+# (or pass --host) to explicitly opt into LAN exposure, e.g. to view the
+# dashboard from a laptop while PISA runs headless on a field Pi.
+FLASK_HOST = os.environ.get("PISA_HOST", "127.0.0.1")
 FLASK_PORT = 5000
 FLASK_DEBUG = False
 
