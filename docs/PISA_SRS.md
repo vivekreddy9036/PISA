@@ -177,6 +177,27 @@ on-demand CVE lookup per network.
 
 *Implementation:* `pisa/m5/`
 
+#### FR-12: PMKID / EAPOL Handshake Capture — **[Implemented, passive mode]**
+
+The system shall capture WPA PMKID and 4-way-handshake material from a
+monitor-mode interface by orchestrating `hcxdumptool`/`hcxpcapngtool` (not a
+from-scratch 802.11i EAPOL-Key parser — scapy 2.5's EAPOL layer only decodes
+the 4-byte header). Passive mode (default) transmits nothing — it only
+captures a handshake if the AP or a client generates one on its own, and may
+legitimately capture zero hashes in a short window. Active mode (deauth-based
+forced capture) requires an explicit `authorized=True` argument from the
+caller and is gated the same way FYP documentation §14 requires for any
+active/authorized-mode action; it is not exposed anywhere in the dashboard UI
+yet, so in practice only passive mode is reachable today. Successful captures
+are written as `.hc22000` hash files and linked to the matching `networks`
+row (`handshake_captured`, `handshake_type`, `handshake_path`,
+`handshake_captured_at` — added to the schema in Sprint 2, migrated
+in-place for pre-existing databases).
+
+*Implementation:* `pisa/m0/handshake.py`, `pisa/db/models.py`
+(`_migrate_handshake_columns`), `pisa/db/queries.py`
+(`mark_handshake_captured`, `find_network_by_bssid`)
+
 #### FR-7: IoT Device Discovery — **[Planned]**
 
 The system shall discover devices on the assessed network (ARP sweep, port
@@ -288,6 +309,7 @@ PDF reports (S3 + Lambda).
 | FR-3 | M0 | Implemented |
 | FR-4, FR-5 | DB / M0 | Implemented |
 | FR-6 | M5 | Implemented |
+| FR-12 | M0 | Implemented, passive mode |
 | FR-7 | M1 | Planned |
 | FR-8 | M2 | Planned |
 | FR-9 | M3 | Planned |
@@ -299,3 +321,4 @@ PDF reports (S3 + Lambda).
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | 2026-07-20 | Initial SRS, aligned to v1 (M0 + DB + M5) implementation |
+| 1.1 | 2026-07-23 | Added FR-12 (PMKID/EAPOL handshake capture, Sprint 2) |

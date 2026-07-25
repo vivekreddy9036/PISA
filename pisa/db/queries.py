@@ -183,3 +183,27 @@ def get_devices(conn: sqlite3.Connection, session_id: int) -> list:
     c = conn.cursor()
     c.execute("SELECT * FROM devices WHERE session_id = ?", (session_id,))
     return [dict(r) for r in c.fetchall()]
+
+
+def find_network_by_bssid(conn: sqlite3.Connection, session_id: int, bssid: str) -> int | None:
+    c = conn.cursor()
+    c.execute(
+        "SELECT id FROM networks WHERE session_id = ? AND bssid = ?",
+        (session_id, bssid),
+    )
+    row = c.fetchone()
+    return row[0] if row else None
+
+
+def mark_handshake_captured(
+    conn: sqlite3.Connection, network_id: int, handshake_type: str, path: str
+) -> None:
+    conn.execute(
+        """
+        UPDATE networks
+        SET handshake_captured = 1, handshake_type = ?, handshake_path = ?, handshake_captured_at = ?
+        WHERE id = ?
+        """,
+        (handshake_type, path, _now(), network_id),
+    )
+    conn.commit()

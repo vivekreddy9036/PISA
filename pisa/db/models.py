@@ -29,6 +29,10 @@ def create_tables(conn: sqlite3.Connection) -> None:
         wsps_grade       TEXT,
         first_seen       TEXT    NOT NULL,
         last_seen        TEXT    NOT NULL,
+        handshake_captured    INTEGER DEFAULT 0,
+        handshake_type        TEXT,
+        handshake_path        TEXT,
+        handshake_captured_at TEXT,
         UNIQUE(bssid, session_id)
     );
 
@@ -116,4 +120,20 @@ def create_tables(conn: sqlite3.Connection) -> None:
         created_at    TEXT    NOT NULL
     );
     """)
+    conn.commit()
+    _migrate_handshake_columns(conn)
+
+
+def _migrate_handshake_columns(conn: sqlite3.Connection) -> None:
+    """Add handshake_* columns to networks for DBs created before Sprint 2."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(networks)")}
+    migrations = {
+        "handshake_captured": "ALTER TABLE networks ADD COLUMN handshake_captured INTEGER DEFAULT 0",
+        "handshake_type": "ALTER TABLE networks ADD COLUMN handshake_type TEXT",
+        "handshake_path": "ALTER TABLE networks ADD COLUMN handshake_path TEXT",
+        "handshake_captured_at": "ALTER TABLE networks ADD COLUMN handshake_captured_at TEXT",
+    }
+    for column, ddl in migrations.items():
+        if column not in existing:
+            conn.execute(ddl)
     conn.commit()
