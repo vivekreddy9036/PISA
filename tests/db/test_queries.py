@@ -158,3 +158,37 @@ def test_insert_and_get_devices_for_network(db):
 
     assert len(devices) == 1
     assert devices[0]["ip_address"] == "192.168.1.10"
+
+
+def test_get_device_by_id(db):
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, _network_data())
+        device_id = queries.insert_device(conn, session_id, network_id, {
+            "ip_address": "192.168.1.10",
+        })
+
+        device = queries.get_device_by_id(conn, device_id)
+        assert device["id"] == device_id
+        assert device["ip_address"] == "192.168.1.10"
+
+        assert queries.get_device_by_id(conn, 999) is None
+
+
+def test_insert_and_get_device_cves(db):
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, _network_data())
+        device_id = queries.insert_device(conn, session_id, network_id, {
+            "ip_address": "192.168.1.10",
+        })
+        queries.insert_device_cve(conn, device_id, {
+            "cve_id": "CVE-2020-3118",
+            "cvss_score": 8.8,
+            "description": "Cisco NX-OS vuln",
+        })
+
+        cves = queries.get_device_cves(conn, device_id)
+
+    assert len(cves) == 1
+    assert cves[0]["cve_id"] == "CVE-2020-3118"

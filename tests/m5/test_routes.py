@@ -134,3 +134,32 @@ def test_join_and_discover_devices(client, db, monkeypatch):
 def test_join_network_404_for_missing_network(client):
     resp = client.post("/api/networks/999/join", json={"password": "x"})
     assert resp.status_code == 404
+
+
+def test_check_device_cves(client, db, monkeypatch):
+    monkeypatch.setattr(oui_cve, "lookup_device_cves", lambda vendor, os_guess: [
+        {"cve_id": "CVE-2020-3118", "cvss_score": 8.8, "description": "Cisco NX-OS vuln"},
+    ])
+
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, {"bssid": "AA:BB:CC:00:00:01", "ssid": "TestNet"})
+        device_id = queries.insert_device(conn, session_id, network_id, {
+            "ip_address": "11.12.0.1", "mac_address": "50:0F:80:9A:B2:07",
+            "vendor": "Cisco Systems, Inc", "os_guess": "Cisco Nexus switch (NX-OS 6.0(2))",
+        })
+
+    resp = client.post(f"/api/devices/{device_id}/cves")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert len(data["cves"]) == 1
+    assert data["cves"][0]["cve_id"] == "CVE-2020-3118"
+
+    with get_connection(db) as conn:
+        cves = queries.get_device_cves(conn, device_id)
+    assert len(cves) == 1
+
+
+def test_check_device_cves_404_for_missing_device(client):
+    resp = client.post("/api/devices/999/cves")
+    assert resp.status_code == 404

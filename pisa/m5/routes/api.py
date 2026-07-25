@@ -105,3 +105,21 @@ def network_devices(network_id):
             return jsonify({"error": "not found"}), 404
         devices = queries.get_devices_for_network(conn, network_id)
     return jsonify({"devices": devices})
+
+
+@bp.route("/devices/<int:device_id>/cves", methods=["POST"])
+def check_device_cves(device_id):
+    db_path = current_app.config["DB_PATH"]
+
+    with get_connection(db_path) as conn:
+        device = queries.get_device_by_id(conn, device_id)
+        if device is None:
+            return jsonify({"error": "not found"}), 404
+
+    cves = oui_cve.lookup_device_cves(device["vendor"], device["os_guess"])
+
+    with get_connection(db_path) as conn:
+        for cve in cves:
+            queries.insert_device_cve(conn, device_id, cve)
+
+    return jsonify({"cves": cves})

@@ -127,6 +127,45 @@ def insert_network_cve(conn: sqlite3.Connection, network_id: int, data: dict) ->
     return c.lastrowid
 
 
+def insert_device_cve(conn: sqlite3.Connection, device_id: int, data: dict) -> int:
+    c = conn.cursor()
+    c.execute(
+        """
+        INSERT INTO device_cves
+            (device_id, cve_id, cvss_score, epss_score, kev_listed,
+             exploit_score, description, fetched_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            device_id,
+            data["cve_id"],
+            data.get("cvss_score"),
+            data.get("epss_score"),
+            data.get("kev_listed", 0),
+            data.get("exploit_score"),
+            data.get("description"),
+            _now(),
+        ),
+    )
+    conn.commit()
+    return c.lastrowid
+
+
+def get_device_cves(conn: sqlite3.Connection, device_id: int) -> list:
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT * FROM device_cves WHERE device_id = ?", (device_id,))
+    return [dict(r) for r in c.fetchall()]
+
+
+def get_device_by_id(conn: sqlite3.Connection, device_id: int) -> dict | None:
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT * FROM devices WHERE id = ?", (device_id,))
+    row = c.fetchone()
+    return dict(row) if row else None
+
+
 def insert_alert(
     conn: sqlite3.Connection,
     session_id: int,

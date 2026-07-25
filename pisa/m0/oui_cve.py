@@ -46,15 +46,11 @@ def bssid_to_vendor(bssid: str) -> str:
     return _OUI_DB.get(oui, "Unknown")
 
 
-def lookup_cves(bssid: str, max_results: int = 10) -> list[dict]:
-    """Query NVD 2.0 API by vendor name derived from BSSID OUI."""
-    vendor = bssid_to_vendor(bssid)
-    if vendor == "Unknown":
-        return []
-
+def _query_nvd(keyword: str, max_results: int = 10) -> list[dict]:
+    """Query the NVD 2.0 API by a free-text keyword."""
     url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
     headers = {"apiKey": config.NVD_API_KEY} if config.NVD_API_KEY else {}
-    params = {"keywordSearch": vendor, "resultsPerPage": max_results}
+    params = {"keywordSearch": keyword, "resultsPerPage": max_results}
 
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=15)
@@ -81,3 +77,40 @@ def lookup_cves(bssid: str, max_results: int = 10) -> list[dict]:
         cves.append({"cve_id": cve_id, "cvss_score": cvss, "description": desc})
 
     return cves
+
+
+def lookup_cves(bssid: str, max_results: int = 10) -> list[dict]:
+    """Query NVD 2.0 API by vendor name derived from BSSID OUI."""
+    vendor = bssid_to_vendor(bssid)
+    if vendor == "Unknown":
+        return []
+    return _query_nvd(vendor, max_results)
+
+
+def _simplify_os_guess(os_guess: str) -> str:
+    """Strip the parenthetical version detail from an Nmap os_guess, e.g.
+    "Cisco Nexus switch (NX-OS 6.0(2))" -> "Cisco Nexus switch".
+
+    NVD's keywordSearch ANDs every whitespace-separated token together, so a
+    literal version string like "6.0(2))" — which will never appear verbatim
+    in any CVE description — zeroes out the whole result set even when
+    directly relevant CVEs exist for the product in general.
+    """
+    return os_guess.split("(")[0].strip()
+
+
+def lookup_device_cves(vendor: str, os_guess: str | None = None, max_results: int = 10) -> list[dict]:
+    """Query NVD 2.0 API for a discovered device, preferring its Nmap
+    os_guess (simplified to drop version-specific detail, see
+    _simplify_os_guess) over vendor alone — vendor-only ("Intel Corporate")
+    is too generic to be a useful keyword search and mostly returns
+    unrelated CVEs.
+    """
+    keyword = None
+    if os_guess:
+        keyword = _simplify_os_guess(os_guess) or None
+    if not keyword and vendor and vendor != "Unknown":
+        keyword = vendor
+    if not keyword:
+        return []
+    return _query_nvd(keyword, max_results)

@@ -55,7 +55,7 @@
 <div id="devices-panel" class="devices-panel" style="display:none;">
   <h3>Devices</h3>
   <table id="devices-table">
-    <thead><tr><th>IP</th><th>MAC</th><th>Vendor</th><th>Open Ports</th><th>OS Guess</th></tr></thead>
+    <thead><tr><th>IP</th><th>MAC</th><th>Vendor</th><th>Open Ports</th><th>OS Guess</th><th>CVEs</th></tr></thead>
     <tbody></tbody>
   </table>
 </div>
@@ -87,6 +87,32 @@ document.querySelectorAll('.check-cves-btn').forEach((btn) => {
   });
 });
 
+function renderDeviceCves(cell, cves) {
+  cell.innerHTML = '';
+  if (cves && cves.length) {
+    const ul = document.createElement('ul');
+    cves.forEach((c) => {
+      const li = document.createElement('li');
+      li.textContent = c.cve_id + ' (CVSS ' + c.cvss_score + ')';
+      ul.appendChild(li);
+    });
+    cell.appendChild(ul);
+  } else {
+    cell.textContent = 'No known CVEs';
+  }
+}
+
+function attachCheckDeviceCvesHandler(btn) {
+  btn.addEventListener('click', async () => {
+    const id = btn.dataset.deviceId;
+    btn.textContent = 'Checking...';
+    btn.disabled = true;
+    const res = await fetch('/api/devices/' + id + '/cves', { method: 'POST' });
+    const data = await res.json();
+    renderDeviceCves(btn.closest('.device-cve-cell'), data.cves);
+  });
+}
+
 function renderDevices(devices) {
   const panel = document.getElementById('devices-panel');
   const tbody = panel.querySelector('tbody');
@@ -102,6 +128,15 @@ function renderDevices(devices) {
       td.textContent = val;
       tr.appendChild(td);
     });
+    const cveTd = document.createElement('td');
+    cveTd.className = 'device-cve-cell';
+    const cveBtn = document.createElement('button');
+    cveBtn.className = 'check-device-cves-btn';
+    cveBtn.dataset.deviceId = d.id;
+    cveBtn.textContent = 'Check CVEs';
+    cveTd.appendChild(cveBtn);
+    tr.appendChild(cveTd);
+    attachCheckDeviceCvesHandler(cveBtn);
     tbody.appendChild(tr);
   });
   panel.style.display = 'block';
