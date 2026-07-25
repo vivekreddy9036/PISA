@@ -78,7 +78,21 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5000/sessions/1)",
       "Bash(curl -s http://localhost:5000/)",
       "Bash(pkill -f \"python run.py\")",
-      "Bash(jobs)"
+      "Bash(jobs)",
+      "Bash(sort -t: -k1)",
+      "Bash(iw dev *)",
+      "Bash(iw phy3 *)",
+      "Bash(ethtool -i wlx00c0cab96bf1)",
+      "Bash(ip route *)",
+      "Bash(sudo -S nmcli device set wlx00c0cab96bf1 managed no)",
+      "Bash(sudo -S airmon-ng start wlx00c0cab96bf1)",
+      "Bash(sudo -S ip link set wlan0mon up)",
+      "Bash(sudo -S nmcli connection up ROOT-alfa)",
+      "Bash(kill 9345)",
+      "Bash(sudo -S venv/bin/python run.py)",
+      "Bash(sudo -S airmon-ng stop wlan0mon)",
+      "Bash(sudo -S nmcli device set wlx00c0cab96bf1 managed yes)",
+      "Bash(cd *)"
     ]
   }
 }
