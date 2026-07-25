@@ -116,7 +116,9 @@ def check_device_cves(device_id):
         if device is None:
             return jsonify({"error": "not found"}), 404
 
-    cves = oui_cve.lookup_device_cves(device["vendor"], device["os_guess"])
+    cves = oui_cve.lookup_device_cves(device["os_guess"])
+    if cves is None:
+        return jsonify({"cves": None, "reason": "no_os_fingerprint"})
 
     with get_connection(db_path) as conn:
         for cve in cves:

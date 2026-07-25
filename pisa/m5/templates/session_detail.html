@@ -87,11 +87,13 @@ document.querySelectorAll('.check-cves-btn').forEach((btn) => {
   });
 });
 
-function renderDeviceCves(cell, cves) {
+function renderDeviceCves(cell, data) {
   cell.innerHTML = '';
-  if (cves && cves.length) {
+  if (data.cves === null) {
+    cell.textContent = 'No OS fingerprint — CVE correlation not attempted';
+  } else if (data.cves && data.cves.length) {
     const ul = document.createElement('ul');
-    cves.forEach((c) => {
+    data.cves.forEach((c) => {
       const li = document.createElement('li');
       li.textContent = c.cve_id + ' (CVSS ' + c.cvss_score + ')';
       ul.appendChild(li);
@@ -109,7 +111,7 @@ function attachCheckDeviceCvesHandler(btn) {
     btn.disabled = true;
     const res = await fetch('/api/devices/' + id + '/cves', { method: 'POST' });
     const data = await res.json();
-    renderDeviceCves(btn.closest('.device-cve-cell'), data.cves);
+    renderDeviceCves(btn.closest('.device-cve-cell'), data);
   });
 }
 

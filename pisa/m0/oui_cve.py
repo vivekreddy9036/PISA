@@ -99,18 +99,23 @@ def _simplify_os_guess(os_guess: str) -> str:
     return os_guess.split("(")[0].strip()
 
 
-def lookup_device_cves(vendor: str, os_guess: str | None = None, max_results: int = 10) -> list[dict]:
-    """Query NVD 2.0 API for a discovered device, preferring its Nmap
-    os_guess (simplified to drop version-specific detail, see
-    _simplify_os_guess) over vendor alone — vendor-only ("Intel Corporate")
-    is too generic to be a useful keyword search and mostly returns
-    unrelated CVEs.
+def lookup_device_cves(os_guess: str | None, max_results: int = 10) -> list[dict] | None:
+    """Query NVD 2.0 API for a discovered device using its Nmap os_guess
+    (simplified to drop version-specific detail, see _simplify_os_guess) as
+    the search keyword.
+
+    Returns None — not [] — when there's no os_guess to search with, rather
+    than falling back to a bare vendor name. A vendor-only search (e.g.
+    "Intel Corporate") is too generic to mean anything: verified in practice
+    that several genuinely different, unfingerprinted devices all returned
+    the identical set of decade-old CVEs from a vendor-only query, which
+    would misrepresent noise as a real finding. None means "not attempted",
+    distinct from [] meaning "attempted, nothing found" — callers should
+    show that distinction rather than treating them the same.
     """
-    keyword = None
-    if os_guess:
-        keyword = _simplify_os_guess(os_guess) or None
-    if not keyword and vendor and vendor != "Unknown":
-        keyword = vendor
+    if not os_guess:
+        return None
+    keyword = _simplify_os_guess(os_guess)
     if not keyword:
-        return []
+        return None
     return _query_nvd(keyword, max_results)

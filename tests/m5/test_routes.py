@@ -137,7 +137,7 @@ def test_join_network_404_for_missing_network(client):
 
 
 def test_check_device_cves(client, db, monkeypatch):
-    monkeypatch.setattr(oui_cve, "lookup_device_cves", lambda vendor, os_guess: [
+    monkeypatch.setattr(oui_cve, "lookup_device_cves", lambda os_guess: [
         {"cve_id": "CVE-2020-3118", "cvss_score": 8.8, "description": "Cisco NX-OS vuln"},
     ])
 
@@ -158,6 +158,28 @@ def test_check_device_cves(client, db, monkeypatch):
     with get_connection(db) as conn:
         cves = queries.get_device_cves(conn, device_id)
     assert len(cves) == 1
+
+
+def test_check_device_cves_not_attempted_without_os_guess(client, db, monkeypatch):
+    monkeypatch.setattr(oui_cve, "lookup_device_cves", lambda os_guess: None)
+
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, {"bssid": "AA:BB:CC:00:00:01", "ssid": "TestNet"})
+        device_id = queries.insert_device(conn, session_id, network_id, {
+            "ip_address": "192.168.1.50", "mac_address": "AA:BB:CC:DD:EE:FF",
+            "vendor": "Intel Corporate", "os_guess": None,
+        })
+
+    resp = client.post(f"/api/devices/{device_id}/cves")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["cves"] is None
+    assert data["reason"] == "no_os_fingerprint"
+
+    with get_connection(db) as conn:
+        cves = queries.get_device_cves(conn, device_id)
+    assert cves == []
 
 
 def test_check_device_cves_404_for_missing_device(client):

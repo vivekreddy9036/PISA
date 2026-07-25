@@ -95,12 +95,12 @@ def test_lookup_cves_handles_request_failure():
     assert cves == []
 
 
-def test_lookup_device_cves_prefers_os_guess_over_vendor():
+def test_lookup_device_cves_uses_simplified_os_guess_as_keyword():
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
     mock_resp.json.return_value = {"vulnerabilities": []}
     with patch("pisa.m0.oui_cve.requests.get", return_value=mock_resp) as mock_get:
-        oui_cve.lookup_device_cves("Cisco Systems, Inc", "Cisco Nexus switch (NX-OS 6.0(2))")
+        oui_cve.lookup_device_cves("Cisco Nexus switch (NX-OS 6.0(2))")
     assert mock_get.call_args.kwargs["params"]["keywordSearch"] == "Cisco Nexus switch"
 
 
@@ -109,20 +109,14 @@ def test_simplify_os_guess_strips_version_parenthetical():
     assert oui_cve._simplify_os_guess("Linux 4.X") == "Linux 4.X"
 
 
-def test_lookup_device_cves_falls_back_to_vendor_without_os_guess():
-    mock_resp = MagicMock()
-    mock_resp.raise_for_status = MagicMock()
-    mock_resp.json.return_value = {"vulnerabilities": []}
-    with patch("pisa.m0.oui_cve.requests.get", return_value=mock_resp) as mock_get:
-        oui_cve.lookup_device_cves("Cisco Systems, Inc", None)
-    assert mock_get.call_args.kwargs["params"]["keywordSearch"] == "Cisco Systems, Inc"
-
-
-def test_lookup_device_cves_returns_empty_without_vendor_or_os_guess():
+def test_lookup_device_cves_returns_none_without_os_guess():
+    """None (not []) when there's no os_guess — no vendor-only fallback, since
+    that was confirmed to return the same generic old CVEs for unrelated
+    devices rather than anything meaningful."""
     with patch("pisa.m0.oui_cve.requests.get") as mock_get:
-        cves = oui_cve.lookup_device_cves("Unknown", None)
+        cves = oui_cve.lookup_device_cves(None)
     mock_get.assert_not_called()
-    assert cves == []
+    assert cves is None
 
 
 def test_lookup_device_cves_parses_results():
@@ -140,7 +134,7 @@ def test_lookup_device_cves_parses_results():
         ]
     }
     with patch("pisa.m0.oui_cve.requests.get", return_value=mock_resp):
-        cves = oui_cve.lookup_device_cves("Cisco Systems, Inc", "Cisco Nexus switch (NX-OS 6.0(2))")
+        cves = oui_cve.lookup_device_cves("Cisco Nexus switch (NX-OS 6.0(2))")
 
     assert len(cves) == 1
     assert cves[0]["cve_id"] == "CVE-2020-3118"
