@@ -6,5 +6,6 @@ pisa.db
 htmlcov/
 .coverage
 pisa/m0/oui.txt
+pisa/m3/kev_catalog.json
 ACM_inital_learnig/
 Docs/

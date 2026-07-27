@@ -5,3 +5,8 @@ paho-mqtt==2.1.0
 aiocoap==0.4.7
 requests==2.31.0
 boto3==1.34.131
+routersploit==3.4.7
+standard-telnetlib==3.13.0
+# routersploit imports pkg_resources at runtime (routersploit/resources/
+# wordlists/__init__.py); setuptools>=81 dropped it entirely.
+setuptools<81

@@ -1,4 +1,6 @@
 import os
+import threading
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -43,6 +45,61 @@ def test_bssid_to_vendor_unknown_without_file_and_download_failing():
     with patch("pisa.m0.oui_cve.requests.get", side_effect=Exception("network down")):
         vendor = oui_cve.bssid_to_vendor("AA:BB:CC:00:00:01")
     assert vendor == "Unknown"
+
+
+def test_load_oui_db_thread_safe_under_concurrent_first_calls(monkeypatch):
+    """M1 discovery looks up vendor for many hosts concurrently via a thread
+    pool (pisa/m1/discovery_runner.py). A racing caller must never observe
+    _OUI_DB half-populated — see the docstring on _load_oui_db."""
+    with open(oui_cve._OUI_FILE, "w") as f:
+        f.write("00-50-F2   (hex)\tTP-LINK TECHNOLOGIES CO.,LTD.\n")
+        f.write("AA-BB-CC   (hex)\tLATE VENDOR\n")
+
+    real_open = open
+    first_line_read = threading.Event()
+
+    class SlowFile:
+        def __init__(self, path, *a, **k):
+            self._f = real_open(path, *a, **k)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            self._f.close()
+
+        def __iter__(self):
+            for i, line in enumerate(self._f):
+                if i == 0:
+                    first_line_read.set()
+                    time.sleep(0.05)
+                yield line
+
+    def fake_open(path, *a, **k):
+        if path == oui_cve._OUI_FILE:
+            return SlowFile(path, *a, **k)
+        return real_open(path, *a, **k)
+
+    monkeypatch.setattr("builtins.open", fake_open)
+
+    results = {}
+
+    def loader():
+        results["loader"] = oui_cve.bssid_to_vendor("AA:BB:CC:00:00:01")
+
+    def racer():
+        first_line_read.wait(timeout=1)
+        results["racer"] = oui_cve.bssid_to_vendor("AA:BB:CC:00:00:01")
+
+    t1 = threading.Thread(target=loader)
+    t2 = threading.Thread(target=racer)
+    t1.start()
+    t2.start()
+    t1.join(timeout=2)
+    t2.join(timeout=2)
+
+    assert results["loader"] == "LATE VENDOR"
+    assert results["racer"] == "LATE VENDOR"
 
 
 def test_bssid_to_vendor_downloads_db_when_missing():

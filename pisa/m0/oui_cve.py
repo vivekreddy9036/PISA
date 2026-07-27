@@ -1,27 +1,42 @@
 import os
+import threading
+
 import requests
 import config
 
 _OUI_FILE = os.path.join(os.path.dirname(__file__), "oui.txt")
 _OUI_DB: dict[str, str] = {}
+_OUI_DB_LOCK = threading.Lock()
 
 
 def _load_oui_db() -> None:
+    """Populate _OUI_DB once, guarded against concurrent callers.
+
+    M1 discovery (pisa/m1/discovery_runner.py) looks up vendor for many hosts
+    in parallel via a thread pool. Without the lock, the plain "if _OUI_DB:
+    return" check races: one thread mid-parse leaves _OUI_DB non-empty but
+    only partially populated, so a concurrent caller's check passes early and
+    it looks up its OUI against an incomplete table — silently returning
+    "Unknown" for real vendors depending on thread timing.
+    """
     if _OUI_DB:
         return
-    if not os.path.exists(_OUI_FILE):
-        try:
-            download_oui_db()
-        except Exception as e:
-            print(f"[OUI] Could not download OUI database: {e}")
+    with _OUI_DB_LOCK:
+        if _OUI_DB:
             return
-    with open(_OUI_FILE, "r", errors="ignore") as f:
-        for line in f:
-            if "(hex)" in line:
-                parts = line.split("(hex)")
-                oui = parts[0].strip().replace("-", "").upper()
-                vendor = parts[1].strip()
-                _OUI_DB[oui] = vendor
+        if not os.path.exists(_OUI_FILE):
+            try:
+                download_oui_db()
+            except Exception as e:
+                print(f"[OUI] Could not download OUI database: {e}")
+                return
+        with open(_OUI_FILE, "r", errors="ignore") as f:
+            for line in f:
+                if "(hex)" in line:
+                    parts = line.split("(hex)")
+                    oui = parts[0].strip().replace("-", "").upper()
+                    vendor = parts[1].strip()
+                    _OUI_DB[oui] = vendor
 
 
 def download_oui_db() -> None:

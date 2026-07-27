@@ -52,9 +52,9 @@ rather than assumed to describe a finished system.
 | M0 — OUI→CVE correlation | **Implemented** | On-demand vendor lookup + live NVD 2.0 API query, triggered per-network from the dashboard |
 | M0 — Handshake capture | Planned | Stub only |
 | M1 — Network discovery | Planned | Stub only |
-| M2 — Protocol fingerprinting | Planned | Stub only |
-| M3 — CVE correlation (beyond OUI-CVE) | Planned | Stub only |
-| M4 — Exploit pipeline | Planned | Stub only |
+| M2 — Protocol fingerprinting | **Implemented** | On-demand MQTT/CoAP/HTTP/RTSP probing per device, fused into device_type + confidence, triggered from the dashboard |
+| M3 — CVE correlation (beyond OUI-CVE) | **Implemented** | EPSS + CISA KEV correlation and a tri-metric ExploitScore (CVSS+EPSS+KEV) layered onto every NVD CVE lookup |
+| M4 — Exploit pipeline | **Implemented** | RouterSploit-backed CVE verification (check-only or full exploit), gated by named operator authorization + mandatory 5s confirm, every attempt logged to `exploit_results` |
 | M5 — Dashboard | **Implemented** | Session list, scan trigger (real + demo mode), session detail with WSPS grade badges, on-demand CVE lookup |
 | AWS / Terraform | Planned | Terraform file is a placeholder; no Lambda/DynamoDB/S3 wiring exists |
 
@@ -536,11 +536,15 @@ This is what converts PISA from a point-in-time audit tool into a longitudinal m
 
 #### 1.1 ARP Sweep
 ```python
-# Scapy ARP sweep — discovers all devices on subnet
+# arp-scan (shelled out to, like the Nmap step below) — discovers all devices on subnet
 # Returns: IP, MAC, OUI (manufacturer) per device
 ```
 - Faster than Nmap for initial host discovery
 - Identifies manufacturer from MAC OUI
+- Uses `arp-scan` rather than a hand-rolled Scapy sweep: on a large, busy
+  subnet (verified on a real ~8k-address campus `/19`), Scapy's Python-level
+  reply matching couldn't keep pace with the reply volume and silently missed
+  most hosts, while `arp-scan` swept the same subnet completely in ~30s
 
 #### 1.2 Nmap Service Scan
 ```
@@ -932,7 +936,8 @@ Same views as touchscreen UI
 
 | Library | Version | Use |
 |---|---|---|
-| Scapy | 2.5+ | Raw packet crafting, beacon capture, ARP sweep, EAPOL handling |
+| Scapy | 2.5+ | Raw packet crafting, beacon capture, EAPOL handling |
+| arp-scan | (system) | Shelled out to for ARP-based live host discovery (M1) |
 | python-nmap | 1.6+ | Nmap wrapper for service discovery |
 | paho-mqtt | 2.0+ | MQTT client for behavioral fingerprinting |
 | aiocoap | 0.4+ | CoAP client for behavioral fingerprinting |

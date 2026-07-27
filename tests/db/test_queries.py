@@ -98,6 +98,40 @@ def test_insert_and_get_network_cves(db):
     assert cves[0]["cve_id"] == "CVE-2021-1234"
 
 
+def test_insert_network_cve_upsert_updates_not_duplicates(db):
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, _network_data())
+        queries.insert_network_cve(conn, network_id, {
+            "cve_id": "CVE-2021-1234", "cvss_score": 9.8, "epss_score": 0.2, "description": "old",
+        })
+        queries.insert_network_cve(conn, network_id, {
+            "cve_id": "CVE-2021-1234", "cvss_score": 9.8, "epss_score": 0.9, "kev_listed": 1,
+            "exploit_score": 88.0, "description": "refreshed",
+        })
+
+        cves = queries.get_network_cves(conn, network_id)
+
+    assert len(cves) == 1
+    assert cves[0]["epss_score"] == 0.9
+    assert cves[0]["kev_listed"] == 1
+    assert cves[0]["description"] == "refreshed"
+
+
+def test_insert_device_cve_upsert_updates_not_duplicates(db):
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, _network_data())
+        device_id = queries.insert_device(conn, session_id, network_id, {"ip_address": "192.168.1.10"})
+        queries.insert_device_cve(conn, device_id, {"cve_id": "CVE-2020-3118", "cvss_score": 8.8, "epss_score": 0.1})
+        queries.insert_device_cve(conn, device_id, {"cve_id": "CVE-2020-3118", "cvss_score": 8.8, "epss_score": 0.7})
+
+        cves = queries.get_device_cves(conn, device_id)
+
+    assert len(cves) == 1
+    assert cves[0]["epss_score"] == 0.7
+
+
 def test_insert_alert(db):
     with get_connection(db) as conn:
         session_id = queries.create_session(conn)

@@ -3,6 +3,8 @@ import time
 from pisa.db import queries
 from pisa.db.connection import get_connection
 from pisa.m0 import beacon_capture, oui_cve
+from pisa.m3 import exploit_score
+from pisa.m4 import routersploit_gate
 
 
 def _fake_start_capture(session_id, db_path, iface, timeout):
@@ -68,6 +70,7 @@ def test_check_cves_for_network(client, db, monkeypatch):
     monkeypatch.setattr(oui_cve, "lookup_cves", lambda bssid: [
         {"cve_id": "CVE-2021-1234", "cvss_score": 9.8, "description": "Test vuln"},
     ])
+    monkeypatch.setattr(exploit_score, "enrich_cves", lambda cves: cves)
 
     resp = client.post("/api/scan", json={"duration": 1})
     session_id = resp.get_json()["session_id"]
@@ -136,10 +139,61 @@ def test_join_network_404_for_missing_network(client):
     assert resp.status_code == 404
 
 
+def _wait_for_fingerprinting(client, network_id, attempts=50, delay=0.1):
+    status = None
+    for _ in range(attempts):
+        status = client.get(f"/api/networks/{network_id}/fingerprint/status").get_json()
+        if status["done"] == status["total"]:
+            break
+        time.sleep(delay)
+    return status
+
+
+def test_fingerprint_network_processes_all_devices(client, db, monkeypatch):
+    from pisa.m2 import fingerprint_runner
+
+    def fake_run_fingerprint(device_id, db_path):
+        with get_connection(db_path) as conn:
+            queries.update_device_fingerprint(conn, device_id, "TestType", 0.7)
+
+    monkeypatch.setattr(fingerprint_runner, "run_fingerprint", fake_run_fingerprint)
+
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, {"bssid": "AA:BB:CC:00:00:01", "ssid": "TestNet"})
+        device_ids = [
+            queries.insert_device(conn, session_id, network_id, {
+                "ip_address": f"192.168.1.{i}",
+                "mac_address": f"AA:BB:CC:00:00:{i:02d}",
+                "open_ports": "[]",
+            })
+            for i in range(3)
+        ]
+
+    resp = client.post(f"/api/networks/{network_id}/fingerprint")
+    assert resp.status_code == 200
+
+    status = _wait_for_fingerprinting(client, network_id)
+    assert status == {"total": 3, "done": 3}
+
+    with get_connection(db) as conn:
+        devices = queries.get_devices_for_network(conn, network_id)
+    assert all(d["fingerprint_confidence"] == 0.7 for d in devices)
+    assert len(device_ids) == 3
+
+
+def test_fingerprint_network_404_for_missing_network(client):
+    resp = client.post("/api/networks/999/fingerprint")
+    assert resp.status_code == 404
+    resp = client.get("/api/networks/999/fingerprint/status")
+    assert resp.status_code == 404
+
+
 def test_check_device_cves(client, db, monkeypatch):
     monkeypatch.setattr(oui_cve, "lookup_device_cves", lambda os_guess: [
         {"cve_id": "CVE-2020-3118", "cvss_score": 8.8, "description": "Cisco NX-OS vuln"},
     ])
+    monkeypatch.setattr(exploit_score, "enrich_cves", lambda cves: cves)
 
     with get_connection(db) as conn:
         session_id = queries.create_session(conn)
@@ -185,3 +239,94 @@ def test_check_device_cves_not_attempted_without_os_guess(client, db, monkeypatc
 def test_check_device_cves_404_for_missing_device(client):
     resp = client.post("/api/devices/999/cves")
     assert resp.status_code == 404
+
+
+def _make_device_with_cve(db, cve_id="CVE-2021-1234"):
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, {"bssid": "AA:BB:CC:00:00:01", "ssid": "TestNet"})
+        device_id = queries.insert_device(conn, session_id, network_id, {"ip_address": "192.168.1.10"})
+        queries.insert_device_cve(conn, device_id, {"cve_id": cve_id, "cvss_score": 9.8, "description": "Test vuln"})
+    return device_id
+
+
+def test_exploit_modules_for_cve_returns_matches(client, db, monkeypatch):
+    device_id = _make_device_with_cve(db)
+    monkeypatch.setattr(
+        routersploit_gate, "find_modules_for_cve",
+        lambda cve_id: [{"module_path": "fake.module", "name": "Fake", "description": "", "references": [], "devices": []}],
+    )
+
+    resp = client.get(f"/api/devices/{device_id}/cves/CVE-2021-1234/exploit-modules")
+
+    assert resp.status_code == 200
+    assert resp.get_json()["modules"][0]["module_path"] == "fake.module"
+
+
+def test_exploit_modules_for_cve_404_when_cve_not_on_device(client, db):
+    device_id = _make_device_with_cve(db)
+
+    resp = client.get(f"/api/devices/{device_id}/cves/CVE-9999-9999/exploit-modules")
+
+    assert resp.status_code == 404
+
+
+def test_exploit_modules_for_cve_404_for_missing_device(client):
+    resp = client.get("/api/devices/999/cves/CVE-2021-1234/exploit-modules")
+    assert resp.status_code == 404
+
+
+def test_run_device_exploit_requires_authorized_by(client, db):
+    device_id = _make_device_with_cve(db)
+
+    resp = client.post(f"/api/devices/{device_id}/exploit", json={
+        "cve_id": "CVE-2021-1234", "module_path": "fake.module", "mode": "check",
+    })
+
+    assert resp.status_code == 400
+
+
+def test_run_device_exploit_requires_valid_mode(client, db):
+    device_id = _make_device_with_cve(db)
+
+    resp = client.post(f"/api/devices/{device_id}/exploit", json={
+        "cve_id": "CVE-2021-1234", "module_path": "fake.module", "mode": "destroy",
+        "authorized_by": "vivek",
+    })
+
+    assert resp.status_code == 400
+
+
+def test_run_device_exploit_404_when_cve_not_on_device(client, db):
+    device_id = _make_device_with_cve(db)
+
+    resp = client.post(f"/api/devices/{device_id}/exploit", json={
+        "cve_id": "CVE-9999-9999", "module_path": "fake.module", "mode": "check",
+        "authorized_by": "vivek",
+    })
+
+    assert resp.status_code == 404
+
+
+def test_run_device_exploit_persists_result(client, db, monkeypatch):
+    device_id = _make_device_with_cve(db)
+    monkeypatch.setattr(
+        routersploit_gate, "run_exploit",
+        lambda ip, module_path, mode, port=None: {"success": True, "result": "looks vulnerable"},
+    )
+
+    resp = client.post(f"/api/devices/{device_id}/exploit", json={
+        "cve_id": "CVE-2021-1234", "module_path": "fake.module", "mode": "check",
+        "authorized_by": "vivek",
+    })
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    assert data["result"] == "looks vulnerable"
+
+    with get_connection(db) as conn:
+        results = queries.get_exploit_results(conn, device_id)
+    assert len(results) == 1
+    assert results[0]["authorized_by"] == "vivek"
+    assert results[0]["success"] == 1

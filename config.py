@@ -18,10 +18,39 @@ FLASK_DEBUG = False
 # adapter, per the dual-radio hardware layout.
 JOIN_IFACE = "wlp0s20f3"
 JOIN_TIMEOUT = 30
-ARP_SWEEP_TIMEOUT = 5
+# Safety ceiling (seconds) for the arp-scan subprocess; arp-scan's own
+# per-host timeout/retry/backoff governs actual sweep duration (~30s for an
+# 8k-address /19 in practice) — this just bounds the worst case.
+ARP_SWEEP_TIMEOUT = 60
 NMAP_HOST_TIMEOUT = 30
+# M1: number of hosts Nmap-scanned concurrently during discovery. Each host
+# scan can take up to NMAP_HOST_TIMEOUT; on a subnet with hundreds of live
+# hosts (see ARP_SWEEP_TIMEOUT above), doing this sequentially is a multi-hour
+# bottleneck. Threaded, not multiprocess — each nmap call is a subprocess, so
+# the GIL isn't in the way.
+NMAP_MAX_WORKERS = 30
 IOT_SCAN_PORTS = [22, 23, 80, 443, 502, 554, 1883, 5555, 5683, 8080, 8443]
 MDNS_QUERY_TIMEOUT = 2.0
+
+# M2: protocol fingerprinting. Maps an open TCP port to the probe that
+# understands it. CoAP (5683) is UDP and never shows up in nmap_scan's
+# TCP-only open_ports, so fingerprint_runner probes it unconditionally
+# instead of gating on this map.
+M2_PROTOCOL_PORTS = {
+    1883: "mqtt",
+    5683: "coap",
+    80: "http",
+    443: "http",
+    8080: "http",
+    8443: "http",
+    554: "rtsp",
+}
+M2_PROBE_TIMEOUT = 3.0
+# Every device gets an unconditional CoAP probe (it's UDP, so it never shows
+# up in nmap_scan's TCP-only open_ports — see fingerprint_runner.py), which
+# costs a full M2_PROBE_TIMEOUT on any host that doesn't speak it. Same
+# sequential-vs-hundreds-of-hosts problem M1 hit — fan out concurrently.
+M2_MAX_WORKERS = 30
 
 NVD_API_KEY = os.environ.get("NVD_API_KEY", "")
 AWS_REGION = "ap-south-1"

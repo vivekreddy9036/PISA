@@ -1,11 +1,13 @@
 """ARP sweep to discover live hosts on the network just joined.
 
-Uses scapy (already a project dependency, see pisa/m0/beacon_capture.py)
-rather than shelling out to arp-scan, matching the FYP doc's stated design.
+Shells out to arp-scan (like pisa/m1/nmap_scan.py shells out to nmap) rather
+than using scapy's srp(). Verified on a real campus /19 (~8k addresses):
+scapy's pure-Python reply matching couldn't keep up with the reply volume
+(this network's flat L2 domain returns a heavy duplicate-ARP-reply flood) and
+only surfaced a handful of the live hosts within any timeout short enough to
+be usable; arp-scan swept the same subnet completely in ~30s.
 """
 import subprocess
-
-from scapy.all import ARP, Ether, srp
 
 import config
 
@@ -20,14 +22,24 @@ def _subnet_cidr(iface: str) -> str | None:
     return None
 
 
-def _send_arp(cidr: str, iface: str, timeout: int):
-    ans, _ = srp(
-        Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=cidr),
-        timeout=timeout,
-        iface=iface,
-        verbose=False,
-    )
-    return ans
+def _run_arp_scan(cidr: str, iface: str, timeout: int) -> str:
+    try:
+        proc = subprocess.run(
+            ["arp-scan", "--interface", iface, "--plain", "--quiet", "--ignoredups", cidr],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return ""
+    return proc.stdout
+
+
+def _parse_arp_scan(output: str) -> list[dict]:
+    hosts = []
+    for line in output.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 2 and parts[0].strip() and parts[1].strip():
+            hosts.append({"ip": parts[0].strip(), "mac": parts[1].strip().upper()})
+    return hosts
 
 
 def scan_subnet(iface: str, timeout: int = config.ARP_SWEEP_TIMEOUT) -> list[dict]:
@@ -39,5 +51,5 @@ def scan_subnet(iface: str, timeout: int = config.ARP_SWEEP_TIMEOUT) -> list[dic
     if not cidr:
         return []
 
-    ans = _send_arp(cidr, iface, timeout)
-    return [{"ip": rcv.psrc, "mac": rcv.hwsrc.upper()} for _, rcv in ans]
+    output = _run_arp_scan(cidr, iface, timeout)
+    return _parse_arp_scan(output)

@@ -27,10 +27,9 @@
       <td class="cve-cell" data-network-id="{{ n.id }}">
         {% set cves = cves_by_network.get(n.id, []) %}
         {% if cves %}
-          <ul>{% for c in cves %}<li>{{ c.cve_id }} (CVSS {{ c.cvss_score }})</li>{% endfor %}</ul>
-        {% else %}
-          <button class="check-cves-btn" data-network-id="{{ n.id }}">Check CVEs</button>
+          <ul>{% for c in cves %}<li>{{ c.cve_id }} (CVSS {{ c.cvss_score }}{% if c.epss_score is not none %} &middot; EPSS {{ '%.0f'|format(c.epss_score * 100) }}%{% endif %}{% if c.kev_listed %} &middot; KEV{% endif %}{% if c.exploit_score is not none %} &middot; Score {{ c.exploit_score }}{% endif %})</li>{% endfor %}</ul>
         {% endif %}
+        <button class="check-cves-btn" data-network-id="{{ n.id }}">{{ 'Recheck CVEs' if cves else 'Check CVEs' }}</button>
       </td>
       <td class="devices-cell" data-network-id="{{ n.id }}">
         {% if n.discovery_status == 'done' %}
@@ -55,7 +54,7 @@
 <div id="devices-panel" class="devices-panel" style="display:none;">
   <h3>Devices</h3>
   <table id="devices-table">
-    <thead><tr><th>IP</th><th>MAC</th><th>Vendor</th><th>Name</th><th>Type</th><th>Open Ports</th><th>OS Guess</th><th>CVEs</th></tr></thead>
+    <thead><tr><th>IP</th><th>MAC</th><th>Vendor</th><th>Name</th><th>Type</th><th>Open Ports</th><th>OS Guess</th><th>CVEs</th><th>Fingerprint</th></tr></thead>
     <tbody></tbody>
   </table>
 </div>
@@ -64,7 +63,44 @@
 {% endif %}
 
 <script>
-document.querySelectorAll('.check-cves-btn').forEach((btn) => {
+function formatCve(c) {
+  let text = c.cve_id + ' (CVSS ' + c.cvss_score;
+  if (c.epss_score !== null && c.epss_score !== undefined) {
+    text += ' · EPSS ' + Math.round(c.epss_score * 100) + '%';
+  }
+  if (c.kev_listed) {
+    text += ' · KEV';
+  }
+  if (c.exploit_score !== null && c.exploit_score !== undefined) {
+    text += ' · Score ' + c.exploit_score;
+  }
+  return text + ')';
+}
+
+function renderNetworkCves(cell, id, cves) {
+  cell.innerHTML = '';
+  if (cves && cves.length) {
+    const ul = document.createElement('ul');
+    cves.forEach((c) => {
+      const li = document.createElement('li');
+      li.textContent = formatCve(c);
+      ul.appendChild(li);
+    });
+    cell.appendChild(ul);
+  } else {
+    const p = document.createElement('p');
+    p.textContent = 'No known CVEs';
+    cell.appendChild(p);
+  }
+  const btn = document.createElement('button');
+  btn.className = 'check-cves-btn';
+  btn.dataset.networkId = id;
+  btn.textContent = (cves && cves.length) ? 'Recheck CVEs' : 'Check CVEs';
+  cell.appendChild(btn);
+  attachCheckCvesHandler(btn);
+}
+
+function attachCheckCvesHandler(btn) {
   btn.addEventListener('click', async () => {
     const id = btn.dataset.networkId;
     btn.textContent = 'Checking...';
@@ -72,22 +108,12 @@ document.querySelectorAll('.check-cves-btn').forEach((btn) => {
     const res = await fetch('/api/networks/' + id + '/cves', { method: 'POST' });
     const data = await res.json();
     const cell = document.querySelector('.cve-cell[data-network-id="' + id + '"]');
-    cell.innerHTML = '';
-    if (data.cves && data.cves.length) {
-      const ul = document.createElement('ul');
-      data.cves.forEach((c) => {
-        const li = document.createElement('li');
-        li.textContent = c.cve_id + ' (CVSS ' + c.cvss_score + ')';
-        ul.appendChild(li);
-      });
-      cell.appendChild(ul);
-    } else {
-      cell.textContent = 'No known CVEs';
-    }
+    renderNetworkCves(cell, id, data.cves);
   });
-});
+}
+document.querySelectorAll('.check-cves-btn').forEach(attachCheckCvesHandler);
 
-function renderDeviceCves(cell, data) {
+function renderDeviceCves(cell, deviceId, data) {
   cell.innerHTML = '';
   if (data.cves === null) {
     cell.textContent = 'No OS fingerprint — CVE correlation not attempted';
@@ -95,7 +121,23 @@ function renderDeviceCves(cell, data) {
     const ul = document.createElement('ul');
     data.cves.forEach((c) => {
       const li = document.createElement('li');
-      li.textContent = c.cve_id + ' (CVSS ' + c.cvss_score + ')';
+      const text = document.createElement('span');
+      text.textContent = formatCve(c);
+      li.appendChild(text);
+      li.appendChild(document.createTextNode(' '));
+
+      const verifyBtn = document.createElement('button');
+      verifyBtn.className = 'verify-exploit-btn';
+      verifyBtn.textContent = 'Verify Exploit';
+      li.appendChild(verifyBtn);
+
+      const panel = document.createElement('div');
+      panel.className = 'exploit-panel';
+      panel.style.display = 'none';
+      li.appendChild(panel);
+
+      verifyBtn.addEventListener('click', () => openExploitPanel(deviceId, c.cve_id, verifyBtn, panel));
+
       ul.appendChild(li);
     });
     cell.appendChild(ul);
@@ -111,7 +153,119 @@ function attachCheckDeviceCvesHandler(btn) {
     btn.disabled = true;
     const res = await fetch('/api/devices/' + id + '/cves', { method: 'POST' });
     const data = await res.json();
-    renderDeviceCves(btn.closest('.device-cve-cell'), data);
+    renderDeviceCves(btn.closest('.device-cve-cell'), id, data);
+  });
+}
+
+async function openExploitPanel(deviceId, cveId, btn, panel) {
+  if (panel.dataset.loaded === 'true') {
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    return;
+  }
+  btn.textContent = 'Loading...';
+  btn.disabled = true;
+  const res = await fetch('/api/devices/' + deviceId + '/cves/' + encodeURIComponent(cveId) + '/exploit-modules');
+  const data = await res.json();
+  btn.disabled = false;
+  btn.textContent = 'Verify Exploit';
+  panel.dataset.loaded = 'true';
+  panel.style.display = 'block';
+
+  if (!data.modules || !data.modules.length) {
+    panel.textContent = 'No RouterSploit module found for this CVE.';
+    return;
+  }
+
+  renderExploitForm(panel, deviceId, cveId, data.modules[0], data.modules.length);
+}
+
+function renderExploitForm(panel, deviceId, cveId, mod, matchCount) {
+  panel.innerHTML = '';
+
+  const info = document.createElement('p');
+  info.innerHTML = '<strong>' + mod.name + '</strong>: ' + (mod.description || '') +
+    (matchCount > 1 ? ' (' + matchCount + ' modules matched — showing first)' : '');
+  panel.appendChild(info);
+
+  const modeName = 'mode-' + deviceId + '-' + cveId.replace(/[^a-zA-Z0-9]/g, '');
+
+  const modeLabel1 = document.createElement('label');
+  const modeCheck = document.createElement('input');
+  modeCheck.type = 'radio';
+  modeCheck.name = modeName;
+  modeCheck.value = 'check';
+  modeCheck.checked = true;
+  modeLabel1.appendChild(modeCheck);
+  modeLabel1.appendChild(document.createTextNode(' Check only (safe)'));
+  panel.appendChild(modeLabel1);
+  panel.appendChild(document.createElement('br'));
+
+  const modeLabel2 = document.createElement('label');
+  const modeRun = document.createElement('input');
+  modeRun.type = 'radio';
+  modeRun.name = modeName;
+  modeRun.value = 'run';
+  modeLabel2.appendChild(modeRun);
+  modeLabel2.appendChild(document.createTextNode(' Full exploit (run) — attempts real exploitation'));
+  panel.appendChild(modeLabel2);
+  panel.appendChild(document.createElement('br'));
+
+  const authInput = document.createElement('input');
+  authInput.type = 'text';
+  authInput.placeholder = 'Authorized by (your name)';
+  panel.appendChild(authInput);
+  panel.appendChild(document.createElement('br'));
+
+  const authCheckLabel = document.createElement('label');
+  const authCheck = document.createElement('input');
+  authCheck.type = 'checkbox';
+  authCheckLabel.appendChild(authCheck);
+  authCheckLabel.appendChild(document.createTextNode(' I have explicit authorization to test this device'));
+  panel.appendChild(authCheckLabel);
+  panel.appendChild(document.createElement('br'));
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.textContent = 'Confirm in 5s...';
+  confirmBtn.disabled = true;
+  panel.appendChild(confirmBtn);
+
+  const resultPre = document.createElement('pre');
+  resultPre.className = 'exploit-result';
+  panel.appendChild(resultPre);
+
+  let secondsLeft = 5;
+  function updateConfirmState() {
+    confirmBtn.disabled = secondsLeft > 0 || !authInput.value.trim() || !authCheck.checked;
+  }
+  const countdown = setInterval(() => {
+    secondsLeft -= 1;
+    if (secondsLeft <= 0) {
+      clearInterval(countdown);
+      confirmBtn.textContent = 'Confirm & Execute';
+    } else {
+      confirmBtn.textContent = 'Confirm in ' + secondsLeft + 's...';
+    }
+    updateConfirmState();
+  }, 1000);
+  authInput.addEventListener('input', updateConfirmState);
+  authCheck.addEventListener('change', updateConfirmState);
+
+  confirmBtn.addEventListener('click', async () => {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Executing...';
+    const mode = panel.querySelector('input[name="' + modeName + '"]:checked').value;
+    const res = await fetch('/api/devices/' + deviceId + '/exploit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cve_id: cveId, module_path: mod.module_path, mode,
+        authorized_by: authInput.value.trim(),
+      }),
+    });
+    const data = await res.json();
+    confirmBtn.textContent = 'Confirm & Execute';
+    confirmBtn.disabled = false;
+    resultPre.textContent = (data.success ? '[SUCCESS] ' : '[FAILED] ') + (data.result || data.error || '');
   });
 }
 
@@ -125,9 +279,11 @@ function renderDevices(devices) {
       ports = JSON.parse(d.open_ports || '[]').map((p) => p.port + '/' + (p.service || '?')).join(', ');
     } catch (e) { /* leave blank if unparsable */ }
     const tr = document.createElement('tr');
-    [d.ip_address, d.mac_address || '', d.vendor || '', d.mdns_name || '', d.device_type || '', ports, d.os_guess || ''].forEach((val) => {
+    let typeTd = null;
+    [d.ip_address, d.mac_address || '', d.vendor || '', d.mdns_name || '', d.device_type || '', ports, d.os_guess || ''].forEach((val, i) => {
       const td = document.createElement('td');
       td.textContent = val;
+      if (i === 4) typeTd = td;
       tr.appendChild(td);
     });
     const cveTd = document.createElement('td');
@@ -139,9 +295,54 @@ function renderDevices(devices) {
     cveTd.appendChild(cveBtn);
     tr.appendChild(cveTd);
     attachCheckDeviceCvesHandler(cveBtn);
+
+    const fpTd = document.createElement('td');
+    fpTd.className = 'device-fingerprint-cell';
+    const fpBtn = document.createElement('button');
+    fpBtn.className = 'fingerprint-btn';
+    fpBtn.dataset.deviceId = d.id;
+    fpBtn.textContent = 'Fingerprint';
+    fpTd.appendChild(fpBtn);
+    tr.appendChild(fpTd);
+    attachFingerprintHandler(fpBtn, typeTd, fpTd);
+
     tbody.appendChild(tr);
   });
   panel.style.display = 'block';
+}
+
+function attachFingerprintHandler(btn, typeTd, resultTd) {
+  btn.addEventListener('click', async () => {
+    const id = btn.dataset.deviceId;
+    btn.textContent = 'Probing...';
+    btn.disabled = true;
+    const res = await fetch('/api/devices/' + id + '/fingerprint', { method: 'POST' });
+    const data = await res.json();
+
+    resultTd.innerHTML = '';
+    if (data.device_type) {
+      typeTd.textContent = data.device_type;
+      const summary = document.createElement('div');
+      summary.textContent = data.device_type + ' (' + Math.round((data.confidence || 0) * 100) + '%)';
+      resultTd.appendChild(summary);
+    } else {
+      resultTd.textContent = 'No protocol signals found';
+    }
+    if (data.features && data.features.length) {
+      const details = document.createElement('details');
+      const summaryEl = document.createElement('summary');
+      summaryEl.textContent = data.features.length + ' feature(s)';
+      details.appendChild(summaryEl);
+      const ul = document.createElement('ul');
+      data.features.forEach((f) => {
+        const li = document.createElement('li');
+        li.textContent = f.protocol + ': ' + f.feature_key + ' = ' + (f.feature_value || '');
+        ul.appendChild(li);
+      });
+      details.appendChild(ul);
+      resultTd.appendChild(details);
+    }
+  });
 }
 
 function attachShowDevicesHandler(btn) {

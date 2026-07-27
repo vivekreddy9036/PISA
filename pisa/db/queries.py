@@ -112,6 +112,13 @@ def insert_network_cve(conn: sqlite3.Connection, network_id: int, data: dict) ->
             (network_id, cve_id, cvss_score, epss_score, kev_listed,
              exploit_score, description, fetched_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(network_id, cve_id) DO UPDATE SET
+            cvss_score    = excluded.cvss_score,
+            epss_score    = excluded.epss_score,
+            kev_listed    = excluded.kev_listed,
+            exploit_score = excluded.exploit_score,
+            description   = excluded.description,
+            fetched_at    = excluded.fetched_at
         """,
         (
             network_id,
@@ -136,6 +143,13 @@ def insert_device_cve(conn: sqlite3.Connection, device_id: int, data: dict) -> i
             (device_id, cve_id, cvss_score, epss_score, kev_listed,
              exploit_score, description, fetched_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(device_id, cve_id) DO UPDATE SET
+            cvss_score    = excluded.cvss_score,
+            epss_score    = excluded.epss_score,
+            kev_listed    = excluded.kev_listed,
+            exploit_score = excluded.exploit_score,
+            description   = excluded.description,
+            fetched_at    = excluded.fetched_at
         """,
         (
             device_id,
@@ -165,6 +179,81 @@ def get_device_by_id(conn: sqlite3.Connection, device_id: int) -> dict | None:
     c.execute("SELECT * FROM devices WHERE id = ?", (device_id,))
     row = c.fetchone()
     return dict(row) if row else None
+
+
+def insert_exploit_result(
+    conn: sqlite3.Connection,
+    device_id: int,
+    cve_id: str,
+    module_path: str,
+    authorized_by: str,
+    result: str,
+    success: bool,
+) -> int:
+    """Plain INSERT, deliberately not an upsert like the CVE tables —
+    this is an audit log of authorized exploit-verification attempts
+    (FR-10), not a cached lookup. Every run gets its own row."""
+    c = conn.cursor()
+    now = _now()
+    c.execute(
+        """
+        INSERT INTO exploit_results
+            (device_id, cve_id, module_path, authorized_by, authorized_at,
+             result, success, executed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (device_id, cve_id, module_path, authorized_by, now, result, int(success), now),
+    )
+    conn.commit()
+    return c.lastrowid
+
+
+def get_exploit_results(conn: sqlite3.Connection, device_id: int) -> list:
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT * FROM exploit_results WHERE device_id = ? ORDER BY executed_at DESC", (device_id,))
+    return [dict(r) for r in c.fetchall()]
+
+
+def insert_fingerprint_signature(
+    conn: sqlite3.Connection,
+    device_id: int,
+    protocol: str,
+    feature_key: str,
+    feature_value: str | None,
+    confidence: float | None,
+) -> int:
+    c = conn.cursor()
+    c.execute(
+        """
+        INSERT INTO fingerprint_signatures
+            (device_id, protocol, feature_key, feature_value, confidence, captured_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (device_id, protocol, feature_key, feature_value, confidence, _now()),
+    )
+    conn.commit()
+    return c.lastrowid
+
+
+def get_fingerprint_signatures(conn: sqlite3.Connection, device_id: int) -> list:
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT * FROM fingerprint_signatures WHERE device_id = ?", (device_id,))
+    return [dict(r) for r in c.fetchall()]
+
+
+def update_device_fingerprint(
+    conn: sqlite3.Connection,
+    device_id: int,
+    device_type: str | None,
+    confidence: float | None,
+) -> None:
+    conn.execute(
+        "UPDATE devices SET device_type = ?, fingerprint_confidence = ?, last_seen = ? WHERE id = ?",
+        (device_type, confidence, _now(), device_id),
+    )
+    conn.commit()
 
 
 def insert_alert(
