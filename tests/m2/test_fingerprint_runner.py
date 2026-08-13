@@ -150,3 +150,118 @@ def test_run_fingerprint_network_isolates_one_bad_device_from_the_rest(db, monke
         a["severity"] == "warning" and a["category"] == "fingerprint" and "192.168.3.2" in a["message"]
         for a in alerts
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: structured identity persistence
+# ---------------------------------------------------------------------------
+
+def _make_device_with_vendor(db, open_ports, vendor="Hangzhou Xiongmai Technology", bssid="AA:BB:CC:00:00:09"):
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, {"bssid": bssid, "ssid": "TestNet"})
+        device_id = queries.insert_device(conn, session_id, network_id, {
+            "ip_address": "192.168.1.20",
+            "mac_address": "AA:BB:CC:DD:EE:09",
+            "vendor": vendor,
+            "open_ports": json.dumps(open_ports),
+        })
+    return device_id
+
+
+def test_run_fingerprint_persists_structured_identity(db, monkeypatch):
+    device_id = _make_device_with_vendor(db, [{"port": 80, "service": "http"}])
+
+    monkeypatch.setitem(
+        fingerprint_runner._PROBES, "http",
+        lambda ip, port, timeout: [{
+            "protocol": "http", "feature_key": "http.server", "feature_value": "uc-httpd 1.0.0",
+            "confidence": 0.5, "device_type_hint": None,
+        }],
+    )
+    monkeypatch.setattr(coap_probe, "probe", lambda ip, port, timeout: [])
+
+    result = fingerprint_runner.run_fingerprint(device_id, db_path=db)
+
+    assert result["identity"]["vendor"] == "Hangzhou Xiongmai Technology"
+    assert result["identity"]["product"] == "uc-httpd"
+    assert result["identity"]["version"] == "1.0.0"
+
+    with get_connection(db) as conn:
+        device = queries.get_device_by_id(conn, device_id)
+
+    assert device["identity_vendor"] == "Hangzhou Xiongmai Technology"
+    assert device["identity_product"] == "uc-httpd"
+    assert device["identity_version"] == "1.0.0"
+    assert device["identity_model"] is None
+    assert device["identity_firmware"] is None
+
+
+def test_run_fingerprint_identity_device_type_matches_existing_fuse_result(db, monkeypatch):
+    """Backward compatibility: the structured identity's device_type must
+    be exactly what the existing, unmodified fuse() already decided — no
+    second, competing device_type decision is introduced."""
+    device_id = _make_device_with_vendor(db, [{"port": 1883, "service": "mqtt"}])
+
+    monkeypatch.setitem(
+        fingerprint_runner._PROBES, "mqtt",
+        lambda ip, port, timeout: [{
+            "protocol": "mqtt", "feature_key": "mqtt.connack", "feature_value": "reason_code=0",
+            "confidence": 0.9, "device_type_hint": "MQTT Broker",
+        }],
+    )
+    monkeypatch.setattr(coap_probe, "probe", lambda ip, port, timeout: [])
+
+    result = fingerprint_runner.run_fingerprint(device_id, db_path=db)
+
+    assert result["identity"]["device_type"] == result["device_type"] == "MQTT Broker"
+    assert result["identity"]["confidence"] == result["confidence"] == 0.9
+
+    with get_connection(db) as conn:
+        device = queries.get_device_by_id(conn, device_id)
+
+    # existing device_type/fingerprint_confidence columns still work exactly as before
+    assert device["device_type"] == "MQTT Broker"
+    assert device["fingerprint_confidence"] == 0.9
+
+
+def test_run_fingerprint_identity_does_not_reduce_fingerprint_signatures(db, monkeypatch):
+    """Identity fusion reads fingerprint_signatures' underlying evidence,
+    it must not change how many/which raw signatures get persisted."""
+    device_id = _make_device_with_vendor(db, [{"port": 80, "service": "http"}])
+
+    monkeypatch.setitem(
+        fingerprint_runner._PROBES, "http",
+        lambda ip, port, timeout: [{
+            "protocol": "http", "feature_key": "http.server", "feature_value": "nginx/1.18.0",
+            "confidence": 0.5, "device_type_hint": None,
+        }],
+    )
+    monkeypatch.setattr(coap_probe, "probe", lambda ip, port, timeout: [])
+
+    fingerprint_runner.run_fingerprint(device_id, db_path=db)
+
+    with get_connection(db) as conn:
+        signatures = queries.get_fingerprint_signatures(conn, device_id)
+
+    assert len(signatures) == 1
+    assert signatures[0]["feature_key"] == "http.server"
+    assert signatures[0]["feature_value"] == "nginx/1.18.0"
+
+
+def test_run_fingerprint_identity_with_unknown_vendor_and_no_banner(db, monkeypatch):
+    """No OUI match, no product-identifying probe response — identity
+    stays all-None rather than guessing (mirrors the vendor-only /
+    missing-evidence fuse_identity unit tests, exercised end-to-end)."""
+    device_id = _make_device_with_vendor(db, [], vendor="Unknown", bssid="AA:BB:CC:00:00:10")
+    monkeypatch.setattr(coap_probe, "probe", lambda ip, port, timeout: [])
+
+    result = fingerprint_runner.run_fingerprint(device_id, db_path=db)
+
+    assert result["identity"]["vendor"] is None
+    assert result["identity"]["product"] is None
+
+    with get_connection(db) as conn:
+        device = queries.get_device_by_id(conn, device_id)
+
+    assert device["identity_vendor"] is None

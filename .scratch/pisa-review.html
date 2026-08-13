@@ -1,0 +1,371 @@
+<title>PISA Independent Architecture Review</title>
+<style>
+:root{
+  --bg:#0f1720; --bg2:#141f2b; --panel:#182430; --border:#2a3947;
+  --ink:#e7edf2; --ink-dim:#9fb0bd; --ink-faint:#6b7d8c;
+  --accent:#e8a33d; --accent-ink:#3a2a0d;
+  --good:#5fb88a; --bad:#e2685f; --warn:#e8a33d; --info:#5b9dd6;
+  --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, "Segoe UI", system-ui, Roboto, sans-serif;
+}
+:root[data-theme="light"]{
+  --bg:#f4f6f8; --bg2:#ffffff; --panel:#ffffff; --border:#d7dee4;
+  --ink:#1a232c; --ink-dim:#4c5c68; --ink-faint:#7c8a96;
+  --accent:#b1670f; --accent-ink:#fff4e2;
+  --good:#1f8a5f; --bad:#c23b30; --warn:#a5680b; --info:#2166a3;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f6f8; --bg2:#ffffff; --panel:#ffffff; --border:#d7dee4;
+    --ink:#1a232c; --ink-dim:#4c5c68; --ink-faint:#7c8a96;
+    --accent:#b1670f; --accent-ink:#fff4e2;
+    --good:#1f8a5f; --bad:#c23b30; --warn:#a5680b; --info:#2166a3;
+  }
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;margin:0;font-size:16px}
+.wrap{display:grid;grid-template-columns:250px minmax(0,780px);gap:48px;max-width:1100px;margin:0 auto;padding:48px 24px 120px}
+@media (max-width:880px){.wrap{grid-template-columns:1fr}nav.toc{display:none}}
+nav.toc{position:sticky;top:24px;align-self:start;font-family:var(--mono);font-size:12.5px}
+nav.toc a{display:block;color:var(--ink-faint);text-decoration:none;padding:4px 0 4px 12px;border-left:2px solid var(--border);transition:color .15s,border-color .15s}
+nav.toc a:hover{color:var(--accent);border-color:var(--accent)}
+nav.toc .grp{color:var(--ink-dim);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 2px;font-size:11px;border:none;padding-left:0}
+header.hero{margin-bottom:8px}
+.kicker{font-family:var(--mono);text-transform:uppercase;letter-spacing:.12em;color:var(--accent);font-size:12px;margin:0 0 10px}
+h1{font-size:2.1rem;line-height:1.15;margin:0 0 12px;text-wrap:balance;letter-spacing:-.01em}
+.subhead{color:var(--ink-dim);font-size:1.05rem;max-width:62ch;margin:0 0 28px}
+.verdict{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:6px;padding:20px 22px;margin-bottom:40px}
+.verdict .label{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:8px}
+.verdict p{margin:0 0 10px}
+.verdict p:last-child{margin-bottom:0}
+section{margin:56px 0}
+section h2{font-family:var(--mono);font-size:1.02rem;letter-spacing:.02em;color:var(--ink);border-bottom:1px solid var(--border);padding-bottom:10px;margin:0 0 20px;display:flex;gap:10px;align-items:baseline}
+section h2 .idx{color:var(--accent);font-weight:700}
+h3{font-size:1.02rem;margin:28px 0 10px;color:var(--ink)}
+p{margin:0 0 14px;max-width:68ch}
+ul,ol{margin:0 0 14px;padding-left:22px}
+li{margin-bottom:6px;max-width:64ch}
+code,.mono{font-family:var(--mono);font-size:.88em}
+code{background:var(--bg2);border:1px solid var(--border);padding:1px 6px;border-radius:4px;color:var(--accent)}
+.path{font-family:var(--mono);color:var(--info);font-size:.9em}
+a{color:var(--info)}
+.tblwrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px;margin:16px 0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;min-width:560px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-family:var(--mono);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-dim);background:var(--bg2)}
+tr:last-child td{border-bottom:none}
+td.num, th.num{font-variant-numeric:tabular-nums}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px 18px;margin:14px 0}
+.card.sev-critical{border-left:4px solid var(--bad)}
+.card.sev-high{border-left:4px solid var(--warn)}
+.card.sev-keep{border-left:4px solid var(--good)}
+.card.sev-info{border-left:4px solid var(--info)}
+.card .tag{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;padding:2px 7px;border-radius:3px;display:inline-block;margin-bottom:8px}
+.tag.critical{background:rgba(226,104,95,.15);color:var(--bad)}
+.tag.high{background:rgba(232,163,61,.15);color:var(--warn)}
+.tag.keep{background:rgba(95,184,138,.15);color:var(--good)}
+.tag.info{background:rgba(91,157,214,.15);color:var(--info)}
+.card p{margin:0}
+.card p+p{margin-top:6px}
+.pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--border);color:var(--ink-dim);margin:0 6px 6px 0}
+.flow{font-family:var(--mono);font-size:.86rem;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px 20px;overflow-x:auto;white-space:pre;line-height:1.7;color:var(--ink-dim)}
+.flow b{color:var(--ink)}
+.flow .accent{color:var(--accent)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:640px){.two-col{grid-template-columns:1fr}}
+.status{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:3px}
+.status.real{background:rgba(95,184,138,.15);color:var(--good)}
+.status.partial{background:rgba(232,163,61,.15);color:var(--warn)}
+.status.stub{background:rgba(226,104,95,.15);color:var(--bad)}
+.status.none{background:rgba(107,125,140,.15);color:var(--ink-faint)}
+blockquote{margin:16px 0;padding:2px 18px;border-left:3px solid var(--border);color:var(--ink-dim);font-style:italic}
+footer{margin-top:80px;padding-top:20px;border-top:1px solid var(--border);color:var(--ink-faint);font-size:.85rem;font-family:var(--mono)}
+</style>
+
+<div class="wrap">
+<nav class="toc">
+  <div class="grp">Review</div>
+  <a href="#verdict">Executive verdict</a>
+  <a href="#codebase">Codebase audit</a>
+  <a href="#architecture">Architecture critique</a>
+  <a href="#corrected">Corrected architecture</a>
+  <a href="#workflow">Target walkthrough</a>
+  <div class="grp">Deep dives</div>
+  <a href="#exploitation">Exploitation strategy</a>
+  <a href="#vulnintel">Vulnerability intel</a>
+  <a href="#identity">Device identity</a>
+  <a href="#pisasec">PISA's own security</a>
+  <div class="grp">Decisions</div>
+  <a href="#research">Research contribution</a>
+  <a href="#mvp">MVP &amp; roadmap</a>
+  <a href="#killlist">Kill list / bullshit</a>
+  <a href="#acceptance">Acceptance tests</a>
+  <a href="#risk">Risk register</a>
+  <a href="#matrix">Competitive matrix</a>
+</nav>
+
+<main>
+<header class="hero">
+  <p class="kicker">Independent architecture &amp; research review — Second senior engineer pass</p>
+  <h1>PISA is a real, working v1 — the proposed 10-engine redesign is not a rewrite, it's a data-model fix wearing a new org chart</h1>
+  <p class="subhead">Read against the actual repository (M0–M5, live), the 20-paper literature set, and the current IoT-pentest / vuln-intel ecosystem. Every claim below is anchored to a file, a line, or a named external source — not to the aspirational document.</p>
+</header>
+
+<div class="verdict" id="verdict-banner">
+  <div class="label">TL;DR</div>
+  <p>PISA v1 is further along than the brief assumes: WiFi capture, network join, protocol fingerprinting, NVD/EPSS/KEV correlation, and a real RouterSploit exploitation gate all exist and run against live hardware — this is not vaporware. But the vulnerability-intelligence layer has a specific, fixable defect that undermines the entire "verify before exploit" claim: <b>there is no CPE, no version-range matching, and no applicability state</b> — CVE correlation is a free-text keyword search against NVD, meaning every "CVE found" today is closer to <code>POTENTIALLY_RELATED</code> than <code>AFFECTED</code>. The 10-engine pipeline in the brief is the right shape, but most of its boxes already exist under M0–M5 names; the actual work is: (1) add a structured identity → CPE → applicability layer, (2) add a verification state machine between "CVE exists" and "exploit ran," (3) stop claiming research novelty the current evaluation can't support, and (4) cut scope that has no lab target to prove itself against.</p>
+</div>
+
+<!-- ============ A/B — VERDICT + CODEBASE ============ -->
+<section id="verdict">
+  <h2><span class="idx">A</span> Executive verdict</h2>
+  <p>The direction is technically sound <i>with one correction</i>: don't treat this as "redesign PISA from scratch into a 10-engine architecture." Treat it as "PISA already built 7 of the 11 engines under different names — finish the applicability/verification layer that's actually missing, and stop letting the documentation claim things the code doesn't do."</p>
+  <p>Three things are true simultaneously, and the review has to hold all three:</p>
+  <ul>
+    <li><b>The engineering is genuinely good in places.</b> The RouterSploit adapter (<span class="path">pisa/m4/routersploit_gate.py</span>) reverse-engineers two real integration seams (module discovery via name-mangled <code>__info__</code>, output capture via RouterSploit's own printer-thread mechanism) that RouterSploit doesn't expose as a public API — that's the kind of unglamorous, correct systems work a redesign should <i>preserve</i>, not throw away chasing an adapter-pattern abstraction the brief speculates about (Section 12). One exploitation backend, done honestly, beats three adapters with two of them half-working.</li>
+    <li><b>The vulnerability-intelligence layer is the one part that is actually broken</b>, in exactly the way the brief warned about: <code>lookup_cves</code>/<code>lookup_device_cves</code> in <span class="path">pisa/m0/oui_cve.py</span> query NVD's <code>keywordSearch</code> with a vendor string or a simplified Nmap OS guess. There is no CPE anywhere in the codebase (verified by grep — zero hits outside a stale doc reference). This is the single highest-priority fix, not a nice-to-have.</li>
+    <li><b>The project documentation is running two different stories</b> — <span class="path">docs/PISA_SRS.md</span> is honest, dated, and self-correcting (it explicitly marks features Implemented/Planned/Removed with real dates). <span class="path">docs/FYP_PROJECT_DOCUMENTATION.md</span> is a "Version 3.0" research-novelty pitch targeting <i>IEEE Internet of Things Journal (IF 8.2)</i> that describes Modbus fingerprinting, behavioral drift detection, and a multiplicative ExploitScore formula — none of which exist in code. Before any redesign work starts, these two documents need to agree, and the aspirational one needs to lose claims the evaluation can't back up. See §K.</li>
+  </ul>
+</section>
+
+<section id="codebase">
+  <h2><span class="idx">B</span> Codebase audit — what's actually there</h2>
+  <p>Verified directly against source, not against the SRS's own claims (which are unusually accurate, but the FYP doc's are not).</p>
+  <div class="tblwrap">
+  <table>
+    <tr><th>Area</th><th>Status</th><th>Evidence</th></tr>
+    <tr><td>M0 beacon capture + WSPS scoring</td><td><span class="status real">Real</span></td><td>Scapy monitor-mode sniff, pure-function scoring (<span class="path">m0/wsps.py</span>), unit-tested without mocks — genuinely offline-testable per NFR-2.</td></tr>
+    <tr><td>M0 OUI→CVE / M3 device CVE correlation</td><td><span class="status partial">Working but architecturally wrong</span></td><td><span class="path">m0/oui_cve.py::_query_nvd</span> — free-text <code>keywordSearch</code>, no CPE, no version matching. See §Vulnerability Intel below.</td></tr>
+    <tr><td><span class="path">pisa/m3/nvd_client.py</span></td><td><span class="status stub">Dead stub</span></td><td>Entire file is one comment line. The real NVD client lives in <code>m0</code>, not <code>m3</code>, despite FR-9 attributing CVE correlation partly to M3 — module boundary doesn't match the code that implements it. Delete or relocate.</td></tr>
+    <tr><td>M1 network join + discovery (ARP/Nmap/mDNS)</td><td><span class="status real">Real</span></td><td>Shelled to <code>arp-scan</code>/<code>nmap</code>/<code>nmcli</code> deliberately (a Scapy sweep was tried and measured too slow on an 8k-host subnet — documented, not guessed). Thread-pooled, isolates per-host failures as warnings rather than aborting the batch.</td></tr>
+    <tr><td>M2 protocol fingerprinting (MQTT/CoAP/HTTP/RTSP)</td><td><span class="status real">Real, narrow</span></td><td>Four probes + <span class="path">m2/fusion.py</span> (pure, unit-tested). Modbus is claimed in the FYP doc's Claim 3 and referenced only as a port number in <span class="path">m1/nmap_scan.py</span> — <b>no Modbus probe exists</b>.</td></tr>
+    <tr><td>Behavioral drift detection</td><td><span class="status stub">Schema-only</span></td><td><code>behavioral_drift</code> table exists in <span class="path">db/models.py</span>; grep confirms zero code anywhere writes or reads it. Claimed in FYP doc as converting PISA into "a longitudinal monitoring platform" — this does not exist.</td></tr>
+    <tr><td>M3 EPSS + KEV + ExploitScore</td><td><span class="status real">Real, defensible</span></td><td>Correct current FIRST.org endpoint, correct CVSS v3.1→v3.0→v2 fallback order, transparent weighted-sum formula with documented missing-value handling. Better engineered than the FYP doc's own (unimplemented) multiplicative formula.</td></tr>
+    <tr><td>CISA KEV catalog</td><td><span class="status partial">Working, no provenance</span></td><td>Downloaded once to <span class="path">m3/kev_catalog.json</span> and never refreshed — worse, the file is <b>checked into git</b>, so it's frozen at whatever date it was last committed. No catalog date/version is stored or surfaced anywhere.</td></tr>
+    <tr><td>M4 RouterSploit exploitation gate</td><td><span class="status real">Real</span></td><td>Genuine reverse-engineering of RouterSploit's non-public internals (see §A). Target IP is read server-side from the DB record, not client-supplied — a real, credit-worthy safety property. No execution timeout, no destructive/non-destructive classification, no rollback/cleanup.</td></tr>
+    <tr><td>M5 dashboard / API</td><td><span class="status real">Real</span></td><td>Flask + SQLite, no external CDN. No authentication on any API route (documented and accepted via loopback-only default) — fine for a single-operator field tool, not fine the moment <code>--host 0.0.0.0</code> is used, which the README itself recommends for the common "view from a laptop" case.</td></tr>
+    <tr><td>AWS / cloud reporting</td><td><span class="status none">Not built</span></td><td><span class="path">terraform/main.tf</span> is a placeholder. Correctly marked Planned everywhere. Not a problem — see §K, this should stay cut.</td></tr>
+    <tr><td>Test suite</td><td><span class="status real">Genuinely tests logic</span></td><td>17/21 test files mock network I/O at the boundary while exercising real logic (WSPS, fusion, RouterSploit adapter against fake exploit classes with real <code>check()</code>/<code>run()</code> semantics) — this is correct test design, not placeholder theater.</td></tr>
+  </table>
+  </div>
+  <p><b>Bottom line on the codebase:</b> keep M0/M1/M2/M4/M5 largely as-is — they're sound engineering with honest failure modes. The redesign effort belongs almost entirely in the CVE-correlation → applicability → verification chain (M3) and in the device-identity data model (M1/M2's output shape), because that's the one place free-text strings are standing in for structured data that a real applicability engine needs.</p>
+</section>
+
+<!-- ============ ARCHITECTURE CRITIQUE ============ -->
+<section id="architecture">
+  <h2><span class="idx">C</span> Challenging the 10-engine architecture</h2>
+  <p>Engine-by-engine verdict against the proposed <code>Recon → Asset → Protocol → Vuln Intel → Applicability → Test Case → Verification → Exploitation → Evidence → Risk → Report</code> pipeline.</p>
+  <div class="tblwrap">
+  <table>
+    <tr><th>Proposed engine</th><th>Verdict</th><th>Reality</th></tr>
+    <tr><td>Recon Engine</td><td>Already exists</td><td>= M0+M1. Don't rebuild; the arp-scan/nmap choice is already validated against real subnet scale.</td></tr>
+    <tr><td>Asset Intelligence</td><td>Exists but wrong shape</td><td>= device row in <code>devices</code> table, but <code>device_type</code> is a free-text label, not a structured (vendor, product, model, version) tuple. This is the actual blocker for everything downstream.</td></tr>
+    <tr><td>Protocol Intelligence</td><td>Already exists</td><td>= M2. Fine as a name, don't rename the code for it.</td></tr>
+    <tr><td>Vulnerability Intelligence</td><td>Exists, broken</td><td>Keyword search, not CPE match. This is the real rewrite target — see §Vulnerability Intel.</td></tr>
+    <tr><td>Applicability Engine</td><td><b>Does not exist</b></td><td>No CPE, no version range, no confidence-weighted applicability verdict anywhere in the schema or code. This is net-new work, not a refactor.</td></tr>
+    <tr><td>Test Case Engine</td><td>Over-scoped as written</td><td>Don't build a generic OWASP-ISTG test-case interpreter. Build ~8-10 hardcoded, protocol-specific safe checks (default creds, MQTT no-auth, CoAP resource enumeration) as plain Python functions with a shared result shape. A "test case engine" is one Nozomi/Claroty-style abstraction too many for one Pi.</td></tr>
+    <tr><td>Verification Engine</td><td><b>Does not exist</b></td><td>PISA currently has "CVE listed" and "exploit attempted," nothing in between. This is the second real rewrite target.</td></tr>
+    <tr><td>Exploitation Engine</td><td>Already exists, right-sized</td><td>= M4. The brief's adapter abstraction (RouterSploit / PISA PoC / future Metasploit / custom) is premature — build it when there's a second real backend, not before. YAGNI.</td></tr>
+    <tr><td>Evidence Engine</td><td>Thin, needs widening</td><td><code>exploit_results.result</code> is a text blob today. Needs structured fields (request/response, banner, timestamp, tool version) — see §Vulnerability Intel/Evidence below. Small, mechanical addition, not a new subsystem.</td></tr>
+    <tr><td>Risk Engine</td><td>Already exists</td><td>= ExploitScore. Don't build a second, competing score — extend the existing one with an applicability multiplier once that engine exists.</td></tr>
+    <tr><td>Report Engine</td><td>Doesn't exist, low priority</td><td>Dashboard already shows everything a report would contain. A PDF export is a rendering task, not an architecture problem — defer to v2.</td></tr>
+  </table>
+  </div>
+  <p>Net: of 11 proposed engines, <b>7 already exist and should be kept</b>, <b>2 are genuinely missing and are the actual project</b> (Applicability, Verification), <b>1 is over-scoped as proposed</b> (Test Case Engine — shrink it), and <b>1 is premature abstraction</b> (multi-backend Exploitation Engine — defer it).</p>
+</section>
+
+<section id="corrected">
+  <h2><span class="idx">C.1</span> Corrected architecture</h2>
+  <p>Same pipeline shape, but the box that was missing is now explicit, and the box that was over-built in the brief is now sized to what an operator with one lab and one deadline can actually finish.</p>
+  <div class="flow">DISCOVER (M0/M1, existing)
+  → <b>IDENTIFY</b> (M1/M2, <span class="accent">reworked output: structured identity, not a label</span>)
+  → <b>MAP TO CPE</b> (<span class="accent">new — Applicability Engine, MVP-critical</span>)
+  → CORRELATE CVE (M3, <span class="accent">reworked: CPE-match API, not keywordSearch</span>)
+  → <b>DETERMINE APPLICABILITY</b> (<span class="accent">new — version-range check, confidence-tagged</span>)
+  → <b>VERIFY</b> (<span class="accent">new — safe protocol/config checks, one state machine</span>)
+  → EXPLOIT (M4, existing, keep as single RouterSploit backend)
+  → EVIDENCE (<span class="accent">widen exploit_results into structured evidence rows</span>)
+  → SCORE (M3 ExploitScore, existing, extend with applicability weight)
+  → REPORT (M5 dashboard, existing; PDF export deferred to v2)</div>
+</section>
+
+<section id="workflow">
+  <h2><span class="idx">E</span> One target, end to end</h2>
+  <p>Example: an OWASP IoTGoat instance on the lab network. Confirmed via the live OWASP/IoTGoat repo: it's built on <code>openwrt-18.06.2</code>, runs via QEMU (or as a VMDK / Firmadyne / ARM-X emulation), and deliberately carries real, citable vulnerabilities from its OpenWrt base — e.g. <b>CVE-2020-28951</b>, a <code>libuci</code> use-after-free — alongside OWASP IoT Top 10-mapped "easter egg" flaws. This is a concrete, verifiable CVE to design the MVP walkthrough around, not a placeholder.</p>
+  <ol>
+    <li><b>Discover:</b> M1 join + ARP/Nmap finds <code>192.168.1.50</code>, open 22/80/1883, Nmap OS guess "Linux 3.x (embedded)".</li>
+    <li><b>Identify (reworked):</b> M2 HTTP probe pulls the admin page title/server header ("IoTGoat"/OpenWrt banner); MQTT probe confirms broker present, no auth. Fusion today would output <code>device_type="IoT Gateway", confidence=0.8</code> — a label. Reworked, it must output <code>{vendor: "OpenWrt", product: "IoTGoat", version: unknown, evidence: [http_header, mqtt_banner], confidence: 0.8}</code>.</li>
+    <li><b>Map to CPE (new):</b> query NVD's CPE API for candidate CPEs matching product="IoTGoat"/OpenWrt version family; if version is unknown, carry a CPE <i>wildcard</i> forward with an explicit <code>version_unknown=true</code> flag rather than silently guessing one.</li>
+    <li><b>Correlate CVE (reworked):</b> NVD CVE API 2.0 <code>cpeName</code> parameter (not keywordSearch) returns CVEs whose configuration nodes reference that CPE, with version-range operators (<code>versionStartIncluding</code>/<code>versionEndExcluding</code>) intact.</li>
+    <li><b>Determine applicability (new):</b> compare the fused device's version info (if any) against each CVE's version range → <code>AFFECTED</code>, <code>POTENTIALLY_AFFECTED</code> (version unknown), or <code>NOT_APPLICABLE</code>.</li>
+    <li><b>Verify (new):</b> run a safe, protocol-specific check for the matched CVE class (e.g., attempt MQTT connect with no credentials; confirm HTTP endpoint reachable without auth) → <code>VERIFIED_VULNERABLE</code> or <code>NOT_VERIFIED</code>, independent of whether an exploit exists.</li>
+    <li><b>Exploit (existing M4):</b> <code>find_modules_for_cve</code> against RouterSploit's index; if a match exists and is authorized, <code>check()</code> then optionally <code>run()</code>.</li>
+    <li><b>Evidence (widened):</b> persist the HTTP/MQTT request-response pair from step 6, the RouterSploit captured output from step 7, and a timestamp+tool-version stamp — not just a result string.</li>
+    <li><b>Score:</b> ExploitScore as today, now gated so a <code>NOT_APPLICABLE</code> CVE never reaches the dashboard as a "finding" at all.</li>
+    <li><b>Report:</b> dashboard renders the full chain per finding — this is already 90% there in <span class="path">m5/templates/session_detail.html</span>.</li>
+  </ol>
+</section>
+
+<!-- ============ EXPLOITATION ============ -->
+<section id="exploitation">
+  <h2><span class="idx">F</span> Real exploitation — what's achievable and what isn't</h2>
+  <p>RouterSploit is a real but narrow backend, and the codebase already knows this — the docstring in <span class="path">m4/routersploit_gate.py</span> states the exact number: <b>only 24 of ~358 modules cite an explicit CVE ID</b>. Independently re-verified against the live <code>threat9/routersploit</code> repo: <b>143 exploit modules, 171 creds modules, 4 scanners, 32 payload generators</b> (~350 total, matching PISA's own count), of which <b>25 of 143 exploit modules</b> mention a CVE string — same picture, confirmed from the outside. The project is not abandoned (last commit 2026-05-05, 93 open issues, actively pushed), but there is <b>no structured CVE metadata field</b> in any module — PISA's substring match against free-text <code>references</code> is the only option there is, not a workaround for something better that was skipped. Coverage skews router/CPE-vendor (D-Link, Netgear, TP-Link) plus a small cameras category — not broad IoT, no BLE/Zigbee/industrial protocols. Treat "no matching module" as the expected, common outcome, not a bug to engineer around.</p>
+  <p>For scope beyond RouterSploit: Metasploit's own IoT/embedded/ICS coverage is comparably thin, but its <code>msfrpcd</code>/msgrpc RPC API is a real, documented, language-agnostic programmatic backend (confirmed at docs.rapid7.com/metasploit/rpc-api) — a legitimate second backend <i>if and when</i> RouterSploit's coverage is demonstrably the bottleneck. Not now (see Kill List, §K) — but worth knowing the path exists rather than speculating about an adapter interface with no second implementation to justify it.</p>
+  <p>What this means concretely for a demo: pick lab targets where the CVE <i>is</i>, in fact, one of RouterSploit's ~24 CVE-tagged modules, or where a hand-written PISA-native check (safe MQTT/CoAP/HTTP probes, no RouterSploit needed) can reach <code>VERIFIED_VULNERABLE</code> without needing a full exploit at all. Verification and exploitation are separable claims — don't let the demo depend on both landing on the same CVE.</p>
+  <div class="tblwrap">
+  <table>
+    <tr><th>State</th><th>Meaning in PISA terms</th><th>Where it lives today</th></tr>
+    <tr><td><code>UNKNOWN</code></td><td>No fingerprint yet</td><td>Default device row state — exists.</td></tr>
+    <tr><td><code>POTENTIALLY_AFFECTED</code></td><td>CVE keyword-matched vendor/OS-guess, version unresolved</td><td><b>Doesn't exist as a state</b> — today this and <code>AFFECTED</code> are indistinguishable; both just render as "CVE found."</td></tr>
+    <tr><td><code>AFFECTED</code></td><td>CPE + version range confirms applicability</td><td>Doesn't exist — no CPE anywhere.</td></tr>
+    <tr><td><code>VERIFICATION_AVAILABLE</code></td><td>A safe check or RouterSploit <code>check()</code> exists for this CVE</td><td><code>find_modules_for_cve</code> covers the RouterSploit half only.</td></tr>
+    <tr><td><code>VERIFIED_VULNERABLE</code></td><td><code>check()</code> or a safe probe confirmed the condition</td><td><code>run_exploit(mode="check")</code> exists but its result isn't persisted as a distinct state — it's folded into <code>exploit_results.success</code>, same table as full exploitation.</td></tr>
+    <tr><td><code>EXPLOIT_AVAILABLE</code></td><td>Module found via <code>find_modules_for_cve</code></td><td>Exists, ad hoc (API response, not a stored state).</td></tr>
+    <tr><td><code>EXPLOIT_SUCCESSFUL</code> / <code>EXPLOIT_FAILED</code></td><td><code>run()</code> outcome</td><td>Exists — <code>exploit_results.success</code>.</td></tr>
+    <tr><td><code>NOT_APPLICABLE</code> / <code>NOT_VULNERABLE</code></td><td>Version range excludes device, or check returned negative</td><td>Doesn't exist — a negative <code>check()</code> and "we never checked" are both just "no exploit_results row."</td></tr>
+  </table>
+  </div>
+  <p><b>Fix:</b> add a single <code>status</code> enum column to <code>device_cves</code> (the states above) and make every stage of the pipeline responsible for advancing it, instead of three separate ad hoc signals (CVE row existing, RouterSploit API response, exploit_results row) that the dashboard currently has to reconcile implicitly.</p>
+</section>
+
+<!-- ============ VULN INTEL ============ -->
+<section id="vulnintel">
+  <h2><span class="idx">G</span> Vulnerability intelligence — audit</h2>
+  <div class="two-col">
+    <div class="card sev-critical"><span class="tag critical">Critical</span><p><b>No CPE, anywhere.</b> <code>_query_nvd</code> uses <code>keywordSearch</code> against a vendor name or a stripped Nmap OS-guess string. NVD's own documentation is explicit that <code>keywordSearch</code> is a free-text match over CVE descriptions — it ANDs every token and has no concept of version, making it prone to both false positives (unrelated CVEs mentioning the vendor name) and false negatives (relevant CVEs that don't happen to use the exact search term). The code already knows part of this — <code>_simplify_os_guess</code> exists specifically because a literal version string zeroes out results — but the fix taken was to strip version info rather than switch to CPE, which removes the symptom and keeps the disease.</p></div>
+    <div class="card sev-high"><span class="tag high">High</span><p><b>No caching / no local CVE store.</b> Every "Check CVEs" click is a live synchronous NVD call in the Flask request thread. No backoff/retry on 403/429, no local database of previously-seen CVEs to fall back to when offline — directly conflicts with the "field deployment may lack internet access" framing already in the SRS's own constraints section.</p></div>
+  </div>
+  <div class="two-col">
+    <div class="card sev-high"><span class="tag high">High</span><p><b>KEV catalog is frozen at commit time.</b> <span class="path">pisa/m3/kev_catalog.json</span> is checked into git and only downloaded if absent — it will never refresh on a long-lived install, and there's no stored catalog date to warn a user it's stale. A data file has no business being version-controlled.</p></div>
+    <div class="card sev-info"><span class="tag info">Correct, mostly</span><p><b>CVSS handling is right for the field's current reality.</b> v3.1 → v3.0 → v2 fallback order matches NVD's own reporting (not every CVE has a v3.1 score). CVSS 3.1 remains the dominant version industry-wide; NVD only began publishing 4.0 alongside 3.1 for <i>newly-published</i> CVEs in early 2026 and has no plan to retroactively rescore the historical database — so treating 3.1 as primary (as the code does) is the correct call, not a gap to rush-fix.</p></div>
+  </div>
+  <h3>EPSS &amp; KEV mechanics — current as implemented, verified against live docs</h3>
+  <ul>
+    <li><b>EPSS:</b> <span class="path">m3/epss_client.py</span> hits <code>https://api.first.org/data/v1/epss?cve=...</code> correctly, batches CVE IDs into one request. Doesn't use the <code>date</code> parameter — confirmed available (historical scores back to 2021-04-14, daily updates ~13:30 UTC) — so a future "was this exploitable-looking a month ago" view is possible without a new data source, just an unused parameter. Fine to skip for MVP; add a caching layer before demo day so a flaky network doesn't blank out every score live.</li>
+    <li><b>KEV:</b> correct source. Missing: catalog version/date storage, scheduled refresh, and any surfaced distinction between "not in KEV" and "we couldn't check KEV" (both currently render as <code>kev_listed=0</code>). Note also that CISA sometimes updates fields on existing KEV entries (e.g. <code>knownRansomwareCampaignUse</code>) without a visible changelog — a naive "diff for new entries only" refresh strategy would miss these; refresh should replace the full local set, not append.</li>
+    <li><b>NVD rate limits (confirmed current):</b> 5 requests/30s unauthenticated, 50 requests/30s with an API key — <span class="path">config.NVD_API_KEY</span> already supports the key path; worth adding a client-side throttle so a bulk "fingerprint whole network → check all CVEs" flow doesn't 429 mid-assessment.</li>
+  </ul>
+  <h3>Do not let PISA say "CVE found → device is vulnerable"</h3>
+  <p>This exact failure mode is present today. A network or device's CVE list is currently rendered with no applicability caveat — a keyword match on "Cisco" returns the same CVE list regardless of whether the actual device is a 2009 switch or a 2024 access point. The fix is not cosmetic (a disclaimer label); it requires the CPE/applicability engine in §C.1 to exist before the UI can honestly distinguish a real finding from a keyword coincidence.</p>
+  <div class="card sev-critical"><span class="tag critical">New, changes the plan</span><p><b>NVD's own enrichment coverage degraded in April 2026 — this is not a hypothetical caveat, it already happened.</b> Confirmed via NIST's own announcement: NVD's CVE backlog (93.4% "Awaiting Analysis" by May 2024) led NIST to formally switch, on <b>2026-04-15/16</b>, to a risk-based triage model — roughly 29,000 backlogged CVEs were reclassified "Not Scheduled," and going forward <b>only CVEs already in CISA KEV or tied to EO-14028 "critical software" get full CPE/CVSS enrichment</b>. Practical consequence for PISA: building the CPE-applicability engine against NVD alone will still silently miss or mis-map a large share of CVEs for ordinary IoT/embedded products that aren't KEV-listed. The applicability engine's data-source design needs to account for this from day one — either treat "no CPE data yet" as its own explicit state (not <code>NOT_APPLICABLE</code>), or supplement NVD with CNA-native sources (GitHub Security Advisories, vendor PSIRTs) for products NVD hasn't triaged. Sources: nist.gov/news-events (2026-04), helpnetsecurity.com (2026-04-16), vulncheck.com/blog/nvd-backlog-exploitation.</p></div>
+</section>
+
+<section id="identity">
+  <h2><span class="idx">B/I</span> Device identity — the real blocker</h2>
+  <p>The brief asks for an "identity fusion model, not a single guessed string." <span class="path">pisa/m2/fusion.py</span> already does confidence fusion correctly as an algorithm — group candidate labels, sum confidence per candidate capped at 1.0, return the max. The defect isn't the fusion math, it's the fusion <i>output shape</i>: a single string (<code>device_type</code>) plus one float (<code>fingerprint_confidence</code>). There's no structured record of <i>which evidence</i> produced that label, no separate confidence per identity dimension (vendor vs. model vs. firmware version), and critically no field that could ever hold a CPE even if one were computed.</p>
+  <p><b>Concrete fix</b> (small, not a rewrite): change the fused output from <code>(device_type, confidence)</code> to <code>(vendor, product, version_hint, device_type, confidence, evidence[])</code>, and have every M2 probe contribute to whichever field it actually has evidence for instead of collapsing everything into one label. This is what makes the applicability engine buildable at all.</p>
+</section>
+
+<section id="pisasec">
+  <h2><span class="idx">N</span> Security of PISA itself</h2>
+  <div class="two-col">
+    <div class="card sev-keep"><span class="tag keep">Good, keep</span><p>Exploit target IP is read server-side from the device's DB row, never taken from the client request — a real, load-bearing safety property that prevents the exploit endpoint from being redirected at an arbitrary IP by tampering with the request body.</p></div>
+    <div class="card sev-high"><span class="tag high">High</span><p>The 5-second confirmation gate (NFR-7) is client-side JS only. A direct <code>POST /api/devices/&lt;id&gt;/exploit</code> with any string in <code>authorized_by</code> bypasses it entirely — the gate protects against an accidental UI click, not against programmatic misuse. Acceptable for the current threat model (trusted single operator, loopback-bound) but should be called out explicitly as a UI safeguard, not a security control, before it's relied on for anything beyond a solo-operator demo.</p></div>
+  </div>
+  <div class="two-col">
+    <div class="card sev-high"><span class="tag high">High</span><p><code>run_device_exploit</code> calls <code>routersploit_gate.run_exploit</code> synchronously in the Flask request thread with no timeout. A hung RouterSploit module (dead TCP connection, blocking read) hangs that worker indefinitely — with Flask's dev server this can starve the whole dashboard.</p></div>
+    <div class="card sev-info"><span class="tag info">Note</span><p>Audit log (<code>exploit_results</code>) is a plain SQLite table with no integrity protection — anyone with file access can edit past authorization records. Not urgent for a solo-operator field tool; becomes relevant the moment PISA is positioned as producing evidence for a client engagement.</p></div>
+  </div>
+</section>
+
+<section id="research">
+  <h2><span class="idx">H</span> Research contribution — be honest about this now</h2>
+  <p>One finding from this review's market research is worth stating plainly because it cuts in PISA's favor: a dedicated search for actively-maintained, portable/Pi-based tools that chain recon → CVE correlation → exploitation for IoT (the P4wnP1 family, Hak5 Pineapple/Pager, netool, Flipper Zero) turned up <b>no comparable project</b> — the field-hardware category is Wi-Fi-MITM-only (Pineapple/Pager) or RF/NFC-only (Flipper); the enterprise XIoT category (Nozomi/Claroty/Armis/Forescout/Defender for IoT) is uniformly detect-and-score, never exploit. That combination is a real, specific, defensible gap PISA can occupy — <i>once the applicability/verification layer exists</i> to make "verify → exploit" trustworthy rather than "keyword match → exploit."</p>
+  <p>The FYP documentation's "5-Part Novelty Claim" targets <i>IEEE Internet of Things Journal</i> (impact factor cited as 8.2). That is not a realistic venue for this project's current evaluation depth — IoT-J requires large-scale empirical evaluation (the very papers PISA cites as baselines, P07/P10, test on 15,000+ traffic flows / 28+ device types). PISA's actual differentiator is systems integration on constrained hardware, which is a legitimate contribution — just not one an IoT-J-caliber venue rewards on its own.</p>
+  <p><b>What can actually be claimed:</b></p>
+  <ul>
+    <li>A working, non-ML, cross-protocol device fingerprinting fusion running on Raspberry Pi 4 — measurable via fingerprint accuracy against a labeled set of 10-15 real lab devices, and resource consumption (CPU/RAM/time) during a full assessment run. This is a legitimate, modest, <i>workshop or student-conference-scale</i> contribution.</li>
+    <li>An empirical demonstration that combining CVSS+EPSS+KEV changes CVE prioritization versus CVSS alone, on a real device set — measurable, falsifiable, small.</li>
+    <li><b>Not claimable yet:</b> anything requiring the applicability engine (precision/recall of CVE matching) — the current keyword-search approach would score badly against ground truth, so this metric should not be attempted for publication until the CPE rework lands.</li>
+  </ul>
+  <p>Recommendation: reposition the paper as a systems/tools contribution (a realistic target: a security-tools workshop, or a national/regional student research conference) rather than a top-tier IoT journal, and drop "first system to do X" framing for claims that are true only relative to the 20-paper reading list rather than the broader literature (e.g., IoT device-ID accuracy work well beyond these 20 papers exists and should be acknowledged, not implied away).</p>
+</section>
+
+<section id="mvp">
+  <h2><span class="idx">I/J</span> MVP and roadmap</h2>
+  <h3>MVP — smallest version that proves the full chain once</h3>
+  <ol>
+    <li>Add <code>status</code> enum to <code>device_cves</code>/<code>network_cves</code> (states from §F).</li>
+    <li>Rework M2 fusion output to structured identity (vendor/product/version_hint) — small change, high leverage.</li>
+    <li>Add an Applicability Engine: NVD CPE API lookup from structured identity, version-range check against CVE configuration nodes, writes <code>AFFECTED</code>/<code>POTENTIALLY_AFFECTED</code>/<code>NOT_APPLICABLE</code>.</li>
+    <li>Add 3-5 hand-written safe verification checks (MQTT no-auth connect, CoAP resource enumeration, HTTP default-creds probe) producing <code>VERIFIED_VULNERABLE</code>/<code>NOT_VERIFIED</code> — independent of RouterSploit.</li>
+    <li>Widen <code>exploit_results</code> into structured evidence (request/response pairs, not just a text blob).</li>
+    <li>Demonstrate the full chain against <b>2-3 controlled targets</b>: OWASP IoTGoat running CVE-2020-28951 or an IoT-Top-10-mapped flaw (applicability engine resolves to <code>AFFECTED</code>, verified via a safe check, no RouterSploit dependency needed), a real router/camera in a home lab with a RouterSploit-covered CVE (proves the exploitation leg), and one device that correctly resolves to <code>NOT_APPLICABLE</code> (proves the applicability engine isn't just a rubber stamp). If a second, non-emulated physical target is wanted, <b>DVID (Damn Vulnerable IoT Device)</b> is a real open-hardware option (ATmega328p board, UART/BLE/Wi-Fi, used in published training courses) — but it requires buying/flashing physical hardware, so only pull it in if IoTGoat + one real device isn't enough for the demo.</li>
+  </ol>
+  <h3>v1 (post-MVP)</h3>
+  <ul><li>Local CVE cache with offline fallback; KEV catalog refresh with stored provenance; CVSS 4.0 handling; execution timeout + async job queue for exploit runs; expand verification checks to ~10 OWASP-ISTG-aligned categories.</li></ul>
+  <h3>v2</h3>
+  <ul><li>PDF report generation; multi-device batch assessment prioritization; expand Modbus/BACnet probes if a real target justifies it (don't build speculatively).</li></ul>
+  <h3>Future (explicitly not now)</h3>
+  <ul><li>AWS cloud sync, GPS/touchscreen hardware integration, second exploitation backend (Metasploit RPC) — only once RouterSploit's coverage is demonstrably the bottleneck, not before.</li></ul>
+</section>
+
+<section id="killlist">
+  <h2><span class="idx">K</span> Kill list — and what's bullshit right now</h2>
+  <div class="card sev-critical"><span class="tag critical">Cut</span><p><b>Behavioral drift detection</b> as a v1/v2 feature. It's schema-only today, described in the FYP doc as a differentiator ("converts PISA into a longitudinal monitoring platform"), and requires repeated-session baseline data this project has no time to collect and validate. Either implement it minimally and honestly, or remove the claim.</p></div>
+  <div class="card sev-critical"><span class="tag critical">Cut / overclaim</span><p><b>Modbus fingerprinting</b> — claimed in the novelty section, zero implementation. Either add one probe module (small, real work) or remove the claim from the FYP doc. Right now it's a sentence, not code.</p></div>
+  <div class="card sev-critical"><span class="tag critical">Cut</span><p><b>Multi-backend exploitation adapter abstraction</b> (RouterSploit / PISA PoC / Metasploit / custom, per the brief's §12). One working backend beats a speculative interface with three stub implementations. Build the abstraction when a second real backend exists, not before.</p></div>
+  <div class="card sev-critical"><span class="tag critical">Cut</span><p><b>Generic Test Case Engine / OWASP ISTG interpreter.</b> Automating the full ISTG is explicitly out of scope per the brief's own instructions (§14) — but the 10-engine pipeline as drawn implies a generic engine anyway. Build 5-10 hardcoded checks, not a framework for checks.</p></div>
+  <div class="card sev-high"><span class="tag high">Downgrade claim</span><p><b>"IEEE IoT-J, IF 8.2" target.</b> Not reachable with this evaluation scope. Reposition per §H before it's cited anywhere the review panel or a co-author will hold you to it.</p></div>
+  <div class="card sev-high"><span class="tag high">Fix, don't cut</span><p><b>"CVE found" language in the dashboard/reports.</b> This isn't a feature to remove — it's a phrase that must not ship again once the applicability engine exists. Every "CVE found" surface needs a status badge (<code>POTENTIALLY_AFFECTED</code> vs <code>AFFECTED</code> vs <code>VERIFIED_VULNERABLE</code>) before this is defensible in front of a review panel or a real client.</p></div>
+</section>
+
+<section id="acceptance">
+  <h2><span class="idx">L</span> Acceptance tests</h2>
+  <div class="tblwrap">
+  <table>
+    <tr><th>ID</th><th>Target / setup</th><th>Success criteria</th></tr>
+    <tr><td>AT-01</td><td>IoTGoat on lab network, PISA joins via M1</td><td>Device appears in <code>devices</code> with IP/MAC/vendor within 60s of join.</td></tr>
+    <tr><td>AT-02</td><td>Same device, M2 fingerprint run</td><td>Structured identity (vendor/product) populated, not just a device_type label; confidence &gt; 0.5.</td></tr>
+    <tr><td>AT-03</td><td>Applicability engine on fingerprinted device</td><td>Correct CPE candidate(s) returned from NVD CPE API for the identified product.</td></tr>
+    <tr><td>AT-04</td><td>Same</td><td>At least one CVE resolves to <code>AFFECTED</code> (not just <code>POTENTIALLY_AFFECTED</code>) via version-range match.</td></tr>
+    <tr><td>AT-05</td><td>Same CVE</td><td>CVSS score present and correctly sourced (v3.1 preferred), matches NVD's published value.</td></tr>
+    <tr><td>AT-06</td><td>Same CVE</td><td>EPSS score present, matches FIRST.org's published value for that CVE ID at query time.</td></tr>
+    <tr><td>AT-07</td><td>Same CVE</td><td>KEV status correct against the current catalog (not a stale checked-in copy).</td></tr>
+    <tr><td>AT-08</td><td>Same CVE, safe check available</td><td>Verification check returns <code>VERIFIED_VULNERABLE</code> on the known-vulnerable IoTGoat instance, <code>NOT_VERIFIED</code> on a patched control instance.</td></tr>
+    <tr><td>AT-09</td><td>Second lab device w/ RouterSploit-covered CVE</td><td><code>find_modules_for_cve</code> returns a match; authorized <code>check()</code> succeeds.</td></tr>
+    <tr><td>AT-10</td><td>Same, full exploit authorized</td><td><code>run()</code> succeeds with captured evidence (not just success=true).</td></tr>
+    <tr><td>AT-11</td><td>Evidence row for AT-10</td><td>Structured evidence (request/response or captured output, timestamp, tool version) persisted, retrievable via API.</td></tr>
+    <tr><td>AT-12</td><td>Unrelated third device (e.g. a modern access point) run through the full chain</td><td>Correctly resolves to <code>NOT_APPLICABLE</code> — proves the applicability engine rejects, not just confirms.</td></tr>
+    <tr><td>AT-13</td><td>Dashboard, all above</td><td>Every CVE shown carries a visible status badge; no unqualified "CVE found" text remains anywhere in the UI.</td></tr>
+    <tr><td>AT-14</td><td>Offline run (no internet) against a session with previously-cached CVE data</td><td>Dashboard still renders prior findings; new lookups fail gracefully with a clear "offline" state, not a silent blank.</td></tr>
+  </table>
+  </div>
+</section>
+
+<section id="risk">
+  <h2><span class="idx">M</span> Risk register</h2>
+  <div class="tblwrap">
+  <table>
+    <tr><th>Risk</th><th>Likelihood</th><th>Impact</th><th>Mitigation</th></tr>
+    <tr><td>Applicability engine takes longer than remaining timeline allows</td><td>High</td><td>Critical — this is the whole point of the redesign</td><td>Scope to one CPE lookup path (exact product match only, skip fuzzy/wildcard matching) for MVP; wildcard/fuzzy handling is v1.</td></tr>
+    <tr><td>No RouterSploit module matches the chosen lab CVE at demo time</td><td>Medium</td><td>High — breaks the exploitation leg of the demo</td><td>Pre-verify module coverage for candidate lab CVEs weeks before demo, not day-of; keep a hand-written safe-check fallback so verification can stand alone.</td></tr>
+    <tr><td>NVD API rate limits / outages during live demo</td><td>Medium</td><td>High</td><td>Local CVE cache (MVP item, not v1) so a demo can run against previously-fetched data if NVD is unreachable.</td></tr>
+    <tr><td>Review panel or advisor holds the FYP doc's unimplemented claims (Modbus, drift detection, IoT-J target) against the actual demo</td><td>High if not fixed</td><td>High — credibility risk, not just a documentation nitpick</td><td>Reconcile FYP doc with SRS before the next review checkpoint; downgrade unimplemented claims explicitly.</td></tr>
+    <tr><td>Hung RouterSploit module blocks the Flask worker thread during a live demo</td><td>Low-medium</td><td>Medium — dashboard appears frozen</td><td>Add a timeout around <code>run_exploit</code> (thread with join timeout, or subprocess isolation) before any public demo.</td></tr>
+    <tr><td>Structured-identity rework breaks existing M2 fusion tests / downstream consumers</td><td>Medium</td><td>Low-medium</td><td>Land as an additive change (keep <code>device_type</code> string derived from the structured fields) rather than a breaking schema replacement.</td></tr>
+  </table>
+  </div>
+</section>
+
+<section id="matrix">
+  <h2><span class="idx">§18</span> Competitive differentiation</h2>
+  <div class="tblwrap">
+  <table>
+    <tr><th>Capability</th><th>PISA (today)</th><th>PISA (post-redesign)</th><th>Hak5 Pineapple/Pager</th><th>RouterSploit alone</th><th>Nozomi/Claroty/Armis-class</th></tr>
+    <tr><td>Portable dedicated hardware</td><td>Partial (RPi, no case/battery yet)</td><td>Partial</td><td>Yes</td><td>No (software only)</td><td>No (appliance/sensor, not handheld)</td></tr>
+    <tr><td>WiFi recon + posture scoring</td><td>Yes (WSPS)</td><td>Yes</td><td>Yes (recon, no scoring)</td><td>No</td><td>No (wired/passive network focus)</td></tr>
+    <tr><td>Device discovery</td><td>Yes</td><td>Yes</td><td>Limited</td><td>No</td><td>Yes (often passive/agentless at scale)</td></tr>
+    <tr><td>CPE-based applicability</td><td><b>No</b></td><td>Yes</td><td>No</td><td>No</td><td>Yes</td></tr>
+    <tr><td>Safe verification (non-exploit)</td><td><b>No</b></td><td>Yes</td><td>No</td><td>Partial (check())</td><td>Yes</td></tr>
+    <tr><td>Authorized exploitation</td><td>Yes (RouterSploit)</td><td>Yes</td><td>No</td><td>Yes</td><td>No (detection-only, by design)</td></tr>
+    <tr><td>EPSS + KEV scoring</td><td>Yes</td><td>Yes</td><td>No</td><td>No</td><td>Some (varies by vendor)</td></tr>
+    <tr><td>Offline field operation</td><td>Partial (dashboard yes, CVE lookups no)</td><td>Yes (with cache)</td><td>Yes</td><td>Yes</td><td>No (needs sensor↔cloud/console link)</td></tr>
+  </table>
+  </div>
+  <p>The honest differentiator isn't "no one else does any of this" — Nozomi/Claroty/Armis do applicability and discovery at enterprise scale; RouterSploit does exploitation; Hak5 does portable recon hardware. PISA's actual claim is <b>doing discovery → applicability → verification → authorized exploitation → evidence in one coherent, portable, single-operator tool</b> — a combination genuinely absent from both the field-pentest-hardware category and the enterprise-XIoT category. That claim is currently unearned because the applicability/verification layer is missing; once §MVP lands, it's a legitimate and specific claim.</p>
+</section>
+
+<footer>PISA independent review — anchored to repo state as of the M2 fingerprinting / demo-target commit (02f37a6). Codebase claims verified by direct source read, not by SRS/FYP doc self-report.</footer>
+</main>
+</div>

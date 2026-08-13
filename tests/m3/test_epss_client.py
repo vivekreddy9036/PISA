@@ -40,3 +40,36 @@ def test_get_epss_scores_returns_empty_on_request_failure():
     with patch("pisa.m3.epss_client.requests.get", side_effect=Exception("network down")):
         scores = epss_client.get_epss_scores(["CVE-2021-1234"])
     assert scores == {}
+
+
+# ---------------------------------------------------------------------------
+# Phase 4: get_epss_records (full percentile/date, not just the bare score)
+# ---------------------------------------------------------------------------
+
+def test_get_epss_records_preserves_percentile_and_date():
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {
+        "data": [{"cve": "CVE-2021-1234", "epss": "0.42", "percentile": "0.91", "date": "2026-08-13"}]
+    }
+    with patch("pisa.m3.epss_client.requests.get", return_value=mock_resp):
+        records = epss_client.get_epss_records(["CVE-2021-1234"])
+
+    assert records == {"CVE-2021-1234": {"score": 0.42, "percentile": 0.91, "date": "2026-08-13"}}
+
+
+def test_get_epss_records_missing_cve_is_absent_not_defaulted():
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {"data": [{"cve": "CVE-2021-1234", "epss": "0.42", "percentile": "0.91", "date": "2026-08-13"}]}
+    with patch("pisa.m3.epss_client.requests.get", return_value=mock_resp):
+        records = epss_client.get_epss_records(["CVE-2021-1234", "CVE-9999-0000"])
+
+    assert "CVE-9999-0000" not in records
+
+
+def test_get_epss_records_empty_for_no_cve_ids():
+    with patch("pisa.m3.epss_client.requests.get") as mock_get:
+        records = epss_client.get_epss_records([])
+    mock_get.assert_not_called()
+    assert records == {}

@@ -46,6 +46,10 @@ def run_fingerprint(device_id: int, db_path: str = config.DB_PATH) -> dict:
         all_features.extend(coap_probe.probe(device["ip_address"], 5683, config.M2_PROBE_TIMEOUT))
 
     device_type, confidence = fusion.fuse(device.get("device_type"), all_features)
+    identity = fusion.fuse_identity(
+        device.get("vendor"), all_features,
+        device_type=device_type, device_type_confidence=confidence,
+    )
 
     with get_connection(db_path) as conn:
         for feature in all_features:
@@ -54,8 +58,27 @@ def run_fingerprint(device_id: int, db_path: str = config.DB_PATH) -> dict:
                 feature.get("feature_value"), feature.get("confidence"),
             )
         queries.update_device_fingerprint(conn, device_id, device_type, confidence)
+        queries.update_device_identity(
+            conn, device_id,
+            vendor=identity.vendor, product=identity.product,
+            model=identity.model, firmware=identity.firmware, version=identity.version,
+        )
 
-    return {"device_type": device_type, "confidence": confidence, "features": all_features}
+    return {
+        "device_type": device_type,
+        "confidence": confidence,
+        "features": all_features,
+        "identity": {
+            "vendor": identity.vendor,
+            "product": identity.product,
+            "model": identity.model,
+            "firmware": identity.firmware,
+            "version": identity.version,
+            "device_type": identity.device_type,
+            "confidence": identity.confidence,
+            "evidence": identity.evidence,
+        },
+    }
 
 
 def run_fingerprint_network(network_id: int, db_path: str = config.DB_PATH) -> None:

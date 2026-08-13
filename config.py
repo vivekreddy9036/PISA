@@ -52,6 +52,19 @@ M2_PROBE_TIMEOUT = 3.0
 # sequential-vs-hundreds-of-hosts problem M1 hit — fan out concurrently.
 M2_MAX_WORKERS = 30
 
+# Phase 6: bounded timeout for a single verification test's network
+# request(s) — matches M2_PROBE_TIMEOUT's role for fingerprinting; a hung
+# target must never hang the Flask request/assessment worker that calls it.
+VERIFICATION_TIMEOUT = 5.0
+
+# Phase 7: bounded wall-clock timeout for one RouterSploit check()/run()
+# call. Enforced via a thread-pool .result(timeout=...) wait, not true
+# process-level termination (a real, documented limitation — see
+# .scratch/pisa-phase7-exploitation.md) — but the caller (Flask request /
+# assessment worker) is guaranteed to get control back within this bound
+# regardless of what the underlying RouterSploit call is doing.
+EXPLOIT_TIMEOUT = 20.0
+
 NVD_API_KEY = os.environ.get("NVD_API_KEY", "")
 AWS_REGION = "ap-south-1"
 S3_BUCKET = "pisa-reports"

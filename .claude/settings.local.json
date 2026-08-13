@@ -130,7 +130,22 @@
       "Bash(sudo -S dmesg)",
       "Read(//sys/class/net/**)",
       "Bash(echo \"exit=$?\")",
-      "Bash(sudo -S kill 18315 18317)"
+      "Bash(sudo -S kill 18315 18317)",
+      "Bash(sudo -S -v)",
+      "Bash(sudo -S venv/bin/python scripts/demo_iot_target.py)",
+      "Bash(disown)",
+      "Bash(sudo ss -ltnp)",
+      "Bash(pkill -f run_demo_app.py)",
+      "Bash(sudo -S pkill -f demo_iot_target.py)",
+      "Bash(sudo -S kill 8708 8716)",
+      "Bash(kill 9400)",
+      "Artifact",
+      "WebFetch(domain:github.com)",
+      "Bash(git commit *)",
+      "WebFetch(domain:nvd.nist.gov)",
+      "WebFetch(domain:nvdlib.com)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:web.archive.org)"
     ]
   }
 }
