@@ -219,12 +219,14 @@ def run_device_exploit(device_id):
         if _get_device_cve_or_none(conn, device_id, cve_id) is None:
             return jsonify({"error": "cve not associated with this device"}), 404
 
+    with get_connection(db_path) as conn:
+        result_id = queries.record_exploit_authorization(
+            conn, device_id, cve_id, module_path, authorized_by,
+        )
+
     outcome = routersploit_gate.run_exploit(device["ip_address"], module_path, mode, port=port)
 
     with get_connection(db_path) as conn:
-        result_id = queries.insert_exploit_result(
-            conn, device_id, cve_id, module_path, authorized_by,
-            outcome["result"], outcome["success"],
-        )
+        queries.record_exploit_outcome(conn, result_id, outcome["result"], outcome["success"])
 
     return jsonify({"id": result_id, **outcome})

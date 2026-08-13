@@ -337,8 +337,9 @@ the authorizing operator and timestamps (append-only audit log, not a
 cached lookup, unlike the CVE tables).
 
 *Implementation:* `pisa/m4/routersploit_gate.py`, `pisa/db/queries.py`
-(`insert_exploit_result`, `get_exploit_results`), `pisa/m5/routes/api.py`
-(`exploit_modules_for_cve`, `run_device_exploit`)
+(`record_exploit_authorization`, `record_exploit_outcome`,
+`get_exploit_results`), `pisa/m5/routes/api.py` (`exploit_modules_for_cve`,
+`run_device_exploit`)
 
 #### FR-11: Cloud Reporting — **[Planned]**
 
@@ -382,7 +383,7 @@ PDF reports (S3 + Lambda).
 | NFR-4 | The dashboard shall render without any external CDN or internet-hosted asset, to support offline field deployment. | Implemented |
 | NFR-5 | All SQLite writes shall go through a connection with foreign-key enforcement enabled. | Implemented |
 | NFR-6 | Test suite shall run in CI on every push/PR to `main` (GitHub Actions). | Implemented |
-| NFR-7 | *(Planned)* Exploit-verification actions (M4) shall require explicit operator authorization recorded with a timestamp before execution. | Planned |
+| NFR-7 | Exploit-verification actions (M4) shall require explicit operator authorization recorded with a timestamp before execution. | Implemented |
 
 ### 3.4 Use Cases
 
@@ -442,3 +443,4 @@ PDF reports (S3 + Lambda).
 | 1.5 | 2026-07-27 | FR-8 (M2 protocol behavioral fingerprinting) implemented |
 | 1.6 | 2026-07-27 | FR-9 extended with EPSS + CISA KEV correlation and a tri-metric ExploitScore (M3) |
 | 1.7 | 2026-07-27 | FR-10 (M4 authorized RouterSploit exploit verification) implemented |
+| 1.8 | 2026-07-28 | NFR-7 implemented: authorization + timestamp now committed to `exploit_results` before `run_exploit()` is called, not after, so a crash/hang mid-run still leaves a durable audit record |

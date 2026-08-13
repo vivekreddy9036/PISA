@@ -181,18 +181,19 @@ def get_device_by_id(conn: sqlite3.Connection, device_id: int) -> dict | None:
     return dict(row) if row else None
 
 
-def insert_exploit_result(
+def record_exploit_authorization(
     conn: sqlite3.Connection,
     device_id: int,
     cve_id: str,
     module_path: str,
     authorized_by: str,
-    result: str,
-    success: bool,
 ) -> int:
-    """Plain INSERT, deliberately not an upsert like the CVE tables —
-    this is an audit log of authorized exploit-verification attempts
-    (FR-10), not a cached lookup. Every run gets its own row."""
+    """Insert the audit row *before* routersploit_gate.run_exploit() is
+    called (NFR-7): authorization is durably committed even if the
+    RouterSploit call hangs or the process dies mid-run.
+    record_exploit_outcome() fills in the result afterwards. executed_at
+    starts equal to authorized_at (satisfies NOT NULL) and is overwritten
+    once the outcome is known."""
     c = conn.cursor()
     now = _now()
     c.execute(
@@ -200,12 +201,25 @@ def insert_exploit_result(
         INSERT INTO exploit_results
             (device_id, cve_id, module_path, authorized_by, authorized_at,
              result, success, executed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, NULL, 0, ?)
         """,
-        (device_id, cve_id, module_path, authorized_by, now, result, int(success), now),
+        (device_id, cve_id, module_path, authorized_by, now, now),
     )
     conn.commit()
     return c.lastrowid
+
+
+def record_exploit_outcome(
+    conn: sqlite3.Connection, result_id: int, result: str, success: bool
+) -> None:
+    """Fill in the outcome of an already-authorized exploit attempt (see
+    record_exploit_authorization)."""
+    c = conn.cursor()
+    c.execute(
+        "UPDATE exploit_results SET result = ?, success = ?, executed_at = ? WHERE id = ?",
+        (result, int(success), _now(), result_id),
+    )
+    conn.commit()
 
 
 def get_exploit_results(conn: sqlite3.Connection, device_id: int) -> list:

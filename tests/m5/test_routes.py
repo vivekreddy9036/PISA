@@ -330,3 +330,27 @@ def test_run_device_exploit_persists_result(client, db, monkeypatch):
     assert len(results) == 1
     assert results[0]["authorized_by"] == "vivek"
     assert results[0]["success"] == 1
+
+
+def test_run_device_exploit_authorization_persists_even_if_run_crashes(client, db, monkeypatch):
+    """NFR-7: the audit row must be committed before run_exploit() is
+    called, so a crash mid-run still leaves a durable authorization
+    record rather than losing it along with the failed request."""
+    device_id = _make_device_with_cve(db)
+    monkeypatch.setattr(
+        routersploit_gate, "run_exploit",
+        lambda ip, module_path, mode, port=None: (_ for _ in ()).throw(RuntimeError("simulated crash")),
+    )
+
+    resp = client.post(f"/api/devices/{device_id}/exploit", json={
+        "cve_id": "CVE-2021-1234", "module_path": "fake.module", "mode": "check",
+        "authorized_by": "vivek",
+    })
+
+    assert resp.status_code == 500
+
+    with get_connection(db) as conn:
+        results = queries.get_exploit_results(conn, device_id)
+    assert len(results) == 1
+    assert results[0]["authorized_by"] == "vivek"
+    assert results[0]["result"] is None
