@@ -113,37 +113,134 @@ function attachCheckCvesHandler(btn) {
 }
 document.querySelectorAll('.check-cves-btn').forEach(attachCheckCvesHandler);
 
+// State labels are shown verbatim (underscores -> spaces) from the
+// backend's own enum values (e.g. "VERIFIED_VULNERABLE" -> "VERIFIED
+// VULNERABLE") — never re-derived or guessed client-side, since the
+// server (pisa/m3/applicability.py, verification.py, exploitation.py)
+// is the sole source of truth for these states.
+function stateLabel(s) {
+  return (s || '').replace(/_/g, ' ');
+}
+
+function formatDeviceFinding(f) {
+  let text = f.cve_id + ' (CVSS ' + (f.cvss_score != null ? f.cvss_score : '?');
+  if (f.epss_score !== null && f.epss_score !== undefined) {
+    text += ' · EPSS ' + Math.round(f.epss_score * 100) + '%';
+  }
+  if (f.kev_listed) {
+    text += ' · KEV';
+  }
+  if (f.exploit_score !== null && f.exploit_score !== undefined) {
+    text += ' · Score ' + f.exploit_score;
+  }
+  return text + ')';
+}
+
+function renderFindingRow(deviceId, f) {
+  const li = document.createElement('li');
+  li.className = 'device-cve-finding';
+
+  const header = document.createElement('div');
+  header.textContent = formatDeviceFinding(f);
+  li.appendChild(header);
+
+  // "CVE exists" is never presented as "device is vulnerable" — the
+  // correlation method/CPE source is shown as its own, separate line,
+  // and applicability (below) is what actually says whether it applies.
+  const meta = document.createElement('div');
+  meta.className = 'cve-meta';
+  meta.textContent = (f.correlation_method === 'KEYWORD')
+    ? 'CVE FOUND — keyword match only, no confirmed CPE'
+    : 'CVE FOUND — CPE match (' + stateLabel(f.correlation_method || '') +
+      (f.source_cpe && f.source_cpe.length ? ': ' + f.source_cpe.join(', ') : '') + ')';
+  li.appendChild(meta);
+
+  const applic = document.createElement('div');
+  applic.className = 'state-badge applicability-' + (f.applicability_status || 'unknown').toLowerCase();
+  applic.textContent = 'Applicability: ' + stateLabel(f.applicability_status);
+  li.appendChild(applic);
+
+  const verifRow = document.createElement('div');
+  verifRow.className = 'verification-row';
+  const verifStatus = document.createElement('span');
+  verifStatus.className = 'state-badge verification-' + (f.verification_status || 'not_attempted').toLowerCase();
+  verifStatus.textContent = 'Verification: ' + stateLabel(f.verification_status);
+  verifRow.appendChild(verifStatus);
+
+  // A "Verify" action only makes sense once applicability says this CVE
+  // could apply — matches verification.py's own eligibility rule
+  // (AFFECTED always eligible, POTENTIALLY_AFFECTED only for tests that
+  // support it; the server re-checks this regardless of whether this
+  // button is shown).
+  const eligibleForVerify = (f.applicability_status === 'AFFECTED' || f.applicability_status === 'POTENTIALLY_AFFECTED')
+    && f.verification_status !== 'VERIFIED_VULNERABLE';
+  if (eligibleForVerify) {
+    const verifyBtn = document.createElement('button');
+    verifyBtn.className = 'verify-btn';
+    verifyBtn.textContent = 'Verify';
+    verifyBtn.addEventListener('click', async () => {
+      verifyBtn.disabled = true;
+      verifyBtn.textContent = 'Verifying...';
+      const res = await fetch(
+        '/api/devices/' + deviceId + '/cves/' + encodeURIComponent(f.cve_id) + '/verify',
+        { method: 'POST' },
+      );
+      const data = await res.json();
+      f.verification_status = data.status;
+      li.replaceWith(renderFindingRow(deviceId, f));
+    });
+    verifRow.appendChild(verifyBtn);
+  }
+  li.appendChild(verifRow);
+
+  const exploitRow = document.createElement('div');
+  exploitRow.className = 'exploit-row';
+  // IMPORTANT: this check only decides whether to SHOW the authorize
+  // control. It is not the security boundary — POST /api/devices/<id>/
+  // exploit re-checks applicability_status == AFFECTED AND
+  // verification_status == VERIFIED_VULNERABLE server-side
+  // (pisa/m3/exploitation.py::check_gate) no matter what this button
+  // does or doesn't show, and no matter what a client sends directly.
+  const eligibleForExploit = f.applicability_status === 'AFFECTED' && f.verification_status === 'VERIFIED_VULNERABLE';
+  if (eligibleForExploit) {
+    const exploitBtn = document.createElement('button');
+    exploitBtn.className = 'exploit-btn';
+    exploitBtn.textContent = 'Authorize Exploit';
+    const panel = document.createElement('div');
+    panel.className = 'exploit-panel';
+    panel.style.display = 'none';
+    exploitBtn.addEventListener('click', () => openExploitPanel(deviceId, f.cve_id, exploitBtn, panel));
+    exploitRow.appendChild(exploitBtn);
+    exploitRow.appendChild(panel);
+  } else {
+    const note = document.createElement('span');
+    note.className = 'exploit-ineligible';
+    note.textContent = 'Exploitation unavailable — requires AFFECTED + VERIFIED VULNERABLE (enforced server-side).';
+    exploitRow.appendChild(note);
+  }
+  li.appendChild(exploitRow);
+
+  return li;
+}
+
 function renderDeviceCves(cell, deviceId, data) {
   cell.innerHTML = '';
-  if (data.cves === null) {
-    cell.textContent = 'No OS fingerprint — CVE correlation not attempted';
-  } else if (data.cves && data.cves.length) {
+  const findings = data.findings || [];
+  if (findings.length) {
     const ul = document.createElement('ul');
-    data.cves.forEach((c) => {
-      const li = document.createElement('li');
-      const text = document.createElement('span');
-      text.textContent = formatCve(c);
-      li.appendChild(text);
-      li.appendChild(document.createTextNode(' '));
-
-      const verifyBtn = document.createElement('button');
-      verifyBtn.className = 'verify-exploit-btn';
-      verifyBtn.textContent = 'Verify Exploit';
-      li.appendChild(verifyBtn);
-
-      const panel = document.createElement('div');
-      panel.className = 'exploit-panel';
-      panel.style.display = 'none';
-      li.appendChild(panel);
-
-      verifyBtn.addEventListener('click', () => openExploitPanel(deviceId, c.cve_id, verifyBtn, panel));
-
-      ul.appendChild(li);
-    });
+    findings.forEach((f) => ul.appendChild(renderFindingRow(deviceId, f)));
     cell.appendChild(ul);
   } else {
-    cell.textContent = 'No known CVEs';
+    const p = document.createElement('p');
+    p.textContent = 'No known CVEs (' + stateLabel(data.status) + ')';
+    cell.appendChild(p);
   }
+  const btn = document.createElement('button');
+  btn.className = 'check-device-cves-btn';
+  btn.dataset.deviceId = deviceId;
+  btn.textContent = findings.length ? 'Recheck CVEs' : 'Check CVEs';
+  cell.appendChild(btn);
+  attachCheckDeviceCvesHandler(btn);
 }
 
 function attachCheckDeviceCvesHandler(btn) {
@@ -164,27 +261,37 @@ async function openExploitPanel(deviceId, cveId, btn, panel) {
   }
   btn.textContent = 'Loading...';
   btn.disabled = true;
+  // Informational only (pisa/m5/routes/api.py::exploit_modules_for_cve) —
+  // shows what RouterSploit itself knows about this CVE and which single
+  // module (if any) is PISA's own registered, supported exploit.
+  // supported_module_path is never sent back to the server; the client
+  // cannot select or influence which module actually executes.
   const res = await fetch('/api/devices/' + deviceId + '/cves/' + encodeURIComponent(cveId) + '/exploit-modules');
   const data = await res.json();
   btn.disabled = false;
-  btn.textContent = 'Verify Exploit';
+  btn.textContent = 'Authorize Exploit';
   panel.dataset.loaded = 'true';
   panel.style.display = 'block';
 
-  if (!data.modules || !data.modules.length) {
-    panel.textContent = 'No RouterSploit module found for this CVE.';
+  if (!data.supported_module_path) {
+    panel.textContent = 'No PISA-supported exploit is registered for this CVE. RouterSploit modules ' +
+      '(' + ((data.modules && data.modules.length) || 0) + ' found) merely mentioning this CVE ID ' +
+      'cannot be executed by PISA — only the registered mapping in pisa/m3/exploitation.py can run.';
     return;
   }
 
-  renderExploitForm(panel, deviceId, cveId, data.modules[0], data.modules.length);
+  const matched = (data.modules || []).find((m) => m.pisa_supported);
+  renderExploitForm(panel, deviceId, cveId, data.supported_module_path, matched);
 }
 
-function renderExploitForm(panel, deviceId, cveId, mod, matchCount) {
+function renderExploitForm(panel, deviceId, cveId, supportedModulePath, moduleInfo) {
   panel.innerHTML = '';
 
   const info = document.createElement('p');
-  info.innerHTML = '<strong>' + mod.name + '</strong>: ' + (mod.description || '') +
-    (matchCount > 1 ? ' (' + matchCount + ' modules matched — showing first)' : '');
+  info.innerHTML = '<strong>PISA-supported exploit:</strong> ' + supportedModulePath +
+    (moduleInfo && moduleInfo.name ? ' (' + moduleInfo.name + ')' : '') +
+    ' — server-enforced; this is the only module that can execute for this CVE, ' +
+    'regardless of anything a client sends.';
   panel.appendChild(info);
 
   const modeName = 'mode-' + deviceId + '-' + cveId.replace(/[^a-zA-Z0-9]/g, '');
@@ -254,18 +361,19 @@ function renderExploitForm(panel, deviceId, cveId, mod, matchCount) {
     confirmBtn.disabled = true;
     confirmBtn.textContent = 'Executing...';
     const mode = panel.querySelector('input[name="' + modeName + '"]:checked').value;
+    // No module_path is ever sent — pisa/m3/exploitation.py resolves the
+    // module from its own registry server-side; the client has no way to
+    // influence which module runs.
     const res = await fetch('/api/devices/' + deviceId + '/exploit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        cve_id: cveId, module_path: mod.module_path, mode,
-        authorized_by: authInput.value.trim(),
-      }),
+      body: JSON.stringify({ cve_id: cveId, mode, authorized_by: authInput.value.trim() }),
     });
     const data = await res.json();
     confirmBtn.textContent = 'Confirm & Execute';
     confirmBtn.disabled = false;
-    resultPre.textContent = (data.success ? '[SUCCESS] ' : '[FAILED] ') + (data.result || data.error || '');
+    const label = data.status ? stateLabel(data.status) : (res.ok ? 'DONE' : 'BLOCKED');
+    resultPre.textContent = '[' + label + '] ' + (data.reason || data.result || data.error || '');
   });
 }
 

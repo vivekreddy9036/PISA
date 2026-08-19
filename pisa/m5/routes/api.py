@@ -9,7 +9,7 @@ from pisa.m0 import oui_cve
 from pisa.m0.scan_runner import run_scan
 from pisa.m1 import discovery_runner
 from pisa.m2 import fingerprint_runner
-from pisa.m3 import exploit_score
+from pisa.m3 import applicability, cve_lookup, exploit_score, exploitation, verification
 from pisa.m4 import routersploit_gate
 
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -112,23 +112,29 @@ def network_devices(network_id):
 
 @bp.route("/devices/<int:device_id>/cves", methods=["POST"])
 def check_device_cves(device_id):
+    """Phase 8.1: device-level CVE correlation now goes through the CPE-
+    first pipeline (pisa/m3/cve_lookup.py::correlate_device_cves), which
+    already handles CPE mapping, the keyword fallback (for devices with
+    no usable structured identity), and EPSS/KEV/exploit_score
+    enrichment internally — this route does not duplicate any of that
+    logic, it only orchestrates the one additional cross-module step
+    (applicability) the two modules deliberately don't call each other
+    for (see cve_lookup.py's own docstring on that boundary)."""
     db_path = current_app.config["DB_PATH"]
+    body = request.get_json(silent=True) or {}
+    force_refresh = bool(body.get("force_refresh"))
 
     with get_connection(db_path) as conn:
         device = queries.get_device_by_id(conn, device_id)
         if device is None:
             return jsonify({"error": "not found"}), 404
 
-    cves = oui_cve.lookup_device_cves(device["os_guess"])
-    if cves is None:
-        return jsonify({"cves": None, "reason": "no_os_fingerprint"})
-    cves = exploit_score.enrich_cves(cves)
-
     with get_connection(db_path) as conn:
-        for cve in cves:
-            queries.insert_device_cve(conn, device_id, cve)
+        result = cve_lookup.correlate_device_cves(conn, device_id, force_refresh=force_refresh)
+        for finding in result["findings"]:
+            applicability.determine_applicability(conn, device_id, finding["cve_id"])
 
-    return jsonify({"cves": cves})
+    return jsonify(result)
 
 
 @bp.route("/devices/<int:device_id>/fingerprint", methods=["POST"])
@@ -183,6 +189,15 @@ def _get_device_cve_or_none(conn, device_id, cve_id):
 
 @bp.route("/devices/<int:device_id>/cves/<cve_id>/exploit-modules")
 def exploit_modules_for_cve(device_id, cve_id):
+    """Informational only (Phase 8.5) — lists every RouterSploit module
+    whose own metadata references this CVE ID, purely so an operator can
+    see what RouterSploit itself knows about. This is NOT an execution
+    allowlist: /exploit (below) never accepts a module path from the
+    client and never executes anything outside
+    pisa/m3/exploitation.py's own registry. `pisa_supported` on each
+    entry, and the top-level `supported_module_path`, tell the UI which
+    (if any) of these discovered modules is the one PISA can actually
+    run — everything else is shown for awareness only."""
     db_path = current_app.config["DB_PATH"]
 
     with get_connection(db_path) as conn:
@@ -192,25 +207,67 @@ def exploit_modules_for_cve(device_id, cve_id):
         if _get_device_cve_or_none(conn, device_id, cve_id) is None:
             return jsonify({"error": "cve not associated with this device"}), 404
 
-    return jsonify({"modules": routersploit_gate.find_modules_for_cve(cve_id)})
+    modules = routersploit_gate.find_modules_for_cve(cve_id)
+    definition = exploitation.find_exploit_definition(cve_id)
+    supported_path = f"exploits.{definition.module_path}" if definition and definition.supported else None
+    for module in modules:
+        module["pisa_supported"] = module.get("module_path") == supported_path
+
+    return jsonify({
+        "modules": modules,
+        "supported_module_path": supported_path,
+        "note": (
+            "Informational RouterSploit module search, not an execution allowlist. "
+            "Only the module at 'supported_module_path' (if any) can ever run via "
+            "POST /exploit — the client cannot select or influence which module executes."
+        ),
+    })
+
+
+@bp.route("/devices/<int:device_id>/cves/<cve_id>/verify", methods=["POST"])
+def verify_device_cve(device_id, cve_id):
+    """Phase 8.3: the only live entry point for pisa/m3/verification.py.
+    All verification logic — eligibility gating on applicability_status,
+    test selection, timeout, evidence redaction, persistence — lives
+    entirely in verification.run_verification(); this route is a thin
+    wrapper that returns its result unmodified."""
+    db_path = current_app.config["DB_PATH"]
+
+    with get_connection(db_path) as conn:
+        device = queries.get_device_by_id(conn, device_id)
+        if device is None:
+            return jsonify({"error": "not found"}), 404
+        if _get_device_cve_or_none(conn, device_id, cve_id) is None:
+            return jsonify({"error": "cve not associated with this device"}), 404
+        result = verification.run_verification(conn, device_id, cve_id)
+
+    return jsonify(result)
 
 
 @bp.route("/devices/<int:device_id>/exploit", methods=["POST"])
 def run_device_exploit(device_id):
+    """Phase 8.4: the client supplies only cve_id/mode/authorized_by —
+    never a module_path. pisa/m3/exploitation.py::attempt_exploitation
+    is the sole, authoritative, server-side gate: it looks up the
+    RouterSploit module from its own _REGISTRY (never from the request),
+    and requires applicability_status == AFFECTED AND verification_status
+    == VERIFIED_VULNERABLE AND a supported exploit is registered, before
+    ever calling RouterSploit. This route does not re-implement, weaken,
+    or duplicate any part of that gate — a blocked attempt is not
+    persisted at all (exploitation.py's own behavior), so no
+    exploit_results row is created unless the gate actually passed."""
     db_path = current_app.config["DB_PATH"]
     body = request.get_json(silent=True) or {}
     cve_id = body.get("cve_id") or ""
-    module_path = body.get("module_path") or ""
     mode = body.get("mode") or ""
     authorized_by = (body.get("authorized_by") or "").strip()
-    port = body.get("port")
 
     if not authorized_by:
         return jsonify({"error": "authorized_by is required"}), 400
     if mode not in ("check", "run"):
         return jsonify({"error": "mode must be 'check' or 'run'"}), 400
-    if not module_path:
-        return jsonify({"error": "module_path is required"}), 400
+    if not cve_id:
+        return jsonify({"error": "cve_id is required"}), 400
 
     with get_connection(db_path) as conn:
         device = queries.get_device_by_id(conn, device_id)
@@ -220,13 +277,7 @@ def run_device_exploit(device_id):
             return jsonify({"error": "cve not associated with this device"}), 404
 
     with get_connection(db_path) as conn:
-        result_id = queries.record_exploit_authorization(
-            conn, device_id, cve_id, module_path, authorized_by,
-        )
+        outcome = exploitation.attempt_exploitation(conn, device_id, cve_id, mode, authorized_by)
 
-    outcome = routersploit_gate.run_exploit(device["ip_address"], module_path, mode, port=port)
-
-    with get_connection(db_path) as conn:
-        queries.record_exploit_outcome(conn, result_id, outcome["result"], outcome["success"])
-
-    return jsonify({"id": result_id, **outcome})
+    status_code = 403 if outcome["status"] == exploitation.STATUS_BLOCKED else 200
+    return jsonify(outcome), status_code

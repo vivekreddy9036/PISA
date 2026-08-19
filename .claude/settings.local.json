@@ -145,7 +145,18 @@
       "WebFetch(domain:nvd.nist.gov)",
       "WebFetch(domain:nvdlib.com)",
       "WebFetch(domain:gist.github.com)",
-      "WebFetch(domain:web.archive.org)"
+      "WebFetch(domain:web.archive.org)",
+      "Bash(xargs -I{} sh -c 'echo \"--- {} ---\"; cat {}')",
+      "Read(//proc/device-tree/**)",
+      "Bash(git -C /home/vivek/PISA log -1 --oneline)",
+      "Bash(iw list *)",
+      "Bash(iw phy1 *)",
+      "Bash(iw phy0 *)",
+      "Bash(timeout 5 sudo ip link set wlx00c0cab96bf1 down)",
+      "Bash(echo \"exit code: $?\")",
+      "Bash(sudo -S -p '' /home/vivek/PISA/venv/bin/python3 /tmp/claude-1000/-home-vivek-PISA/42e6c7c8-6d95-47ef-a0ae-533ba7d0f00a/scratchpad/pisa_m0_capture.py)",
+      "Bash(echo \"=== exit code: $? ===\")",
+      "Bash(sudo -S -p '' bash -c ' *)"
     ]
   }
 }

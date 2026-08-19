@@ -485,6 +485,30 @@ def test_upsert_device_cve_intelligence_persists_all_fields(db):
     assert row["kev_listed"] == 1
 
 
+def test_upsert_device_cve_intelligence_persists_exploit_score(db):
+    """Phase 8.2 regression: upsert_device_cve_intelligence must persist
+    exploit_score (previously silently dropped for the CPE-based path —
+    only the legacy insert_device_cve/keyword path ever wrote it)."""
+    with get_connection(db) as conn:
+        session_id = queries.create_session(conn)
+        network_id = queries.insert_network(conn, session_id, _network_data())
+        device_id = queries.insert_device(conn, session_id, network_id, {"ip_address": "192.168.1.10"})
+
+        queries.upsert_device_cve_intelligence(conn, device_id, {
+            "cve_id": "CVE-2017-16725", "cvss_score": 9.8, "exploit_score": 73.6,
+        })
+        cves = queries.get_device_cves(conn, device_id)
+        assert cves[0]["exploit_score"] == 73.6
+
+        # A refresh with an updated score must overwrite, not lose, the value.
+        queries.upsert_device_cve_intelligence(conn, device_id, {
+            "cve_id": "CVE-2017-16725", "cvss_score": 9.8, "exploit_score": 81.2,
+        })
+        cves = queries.get_device_cves(conn, device_id)
+
+    assert cves[0]["exploit_score"] == 81.2
+
+
 def test_upsert_device_cve_intelligence_does_not_touch_applicability_or_verification_status(db):
     """Phase 4 discovers, Phase 5/6 decide — enforced at the DB layer,
     not just by convention."""

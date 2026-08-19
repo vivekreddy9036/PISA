@@ -208,16 +208,17 @@ def upsert_device_cve_intelligence(conn: sqlite3.Connection, device_id: int, fin
     c.execute(
         """
         INSERT INTO device_cves
-            (device_id, cve_id, cvss_score, epss_score, kev_listed, description, fetched_at,
+            (device_id, cve_id, cvss_score, epss_score, kev_listed, exploit_score, description, fetched_at,
              correlation_method, source_cpe, nvd_status, nvd_published, nvd_last_modified,
              cvss_version, cvss_vector, cvss_severity, epss_percentile, epss_date,
              kev_date_added, kev_due_date, kev_known_ransomware_use,
              weaknesses, cve_references, configurations)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(device_id, cve_id) DO UPDATE SET
             cvss_score               = excluded.cvss_score,
             epss_score                = excluded.epss_score,
             kev_listed                 = excluded.kev_listed,
+            exploit_score               = excluded.exploit_score,
             description                = excluded.description,
             fetched_at                 = excluded.fetched_at,
             correlation_method         = excluded.correlation_method,
@@ -243,6 +244,7 @@ def upsert_device_cve_intelligence(conn: sqlite3.Connection, device_id: int, fin
             finding.get("cvss_score"),
             finding.get("epss_score"),
             int(bool(finding.get("kev_listed"))),
+            finding.get("exploit_score"),
             finding.get("description"),
             now,
             finding.get("correlation_method"),

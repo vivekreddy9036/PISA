@@ -160,6 +160,16 @@ def _enrich_with_epss_and_kev(findings: list[dict]) -> None:
         finding["kev_due_date"] = kev.get("dueDate") if kev else None
         finding["kev_known_ransomware_use"] = kev.get("knownRansomwareCampaignUse") if kev else None
 
+        # Phase 8.2: the legacy keyword path (pisa/m0/oui_cve.py + M3's
+        # exploit_score.enrich_cves) has always computed exploit_score;
+        # this CPE-based path didn't, which would silently drop
+        # device_cves.exploit_score for any finding only ever touched by
+        # this path. Reuses the exact same compute_exploit_score formula
+        # — no second scoring implementation.
+        finding["exploit_score"] = exploit_score.compute_exploit_score(
+            finding.get("cvss_score"), finding["epss_score"], finding["kev_listed"],
+        )
+
 
 def correlate_device_cves(
     conn, device_id: int, force_refresh: bool = False, include_keyword_fallback: bool = True,

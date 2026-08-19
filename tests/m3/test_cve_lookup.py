@@ -503,3 +503,30 @@ def test_23_timestamp_preservation(db, monkeypatch):
     assert stored[0]["nvd_published"] == "2017-12-20T19:29:00.257"
     assert stored[0]["nvd_last_modified"] == "2026-06-17T01:09:43.137"
     assert stored[0]["fetched_at"] is not None  # PISA's own retrieval timestamp
+
+
+def test_24_exploit_score_regression_computed_via_existing_formula(db, monkeypatch):
+    """Phase 8.2: the CPE-based path must not silently drop
+    device_cves.exploit_score the way it used to (only the legacy
+    keyword path via pisa/m3/exploit_score.enrich_cves ever computed
+    it). Asserts the value matches exploit_score.compute_exploit_score
+    exactly — the existing formula, not a reimplementation."""
+    monkeypatch.setattr(cpe_mapper, "_query_nvd_cpe", lambda kw, max_results=20: [{
+        "cpe": {"deprecated": False, "cpeName": "cpe:2.3:h:vendor:product:-:*:*:*:*:*:*:*", "cpeNameId": "id1"},
+    }])
+    monkeypatch.setattr(cve_lookup.nvd_client, "query_cves_by_cpe", lambda cpe, **kw: [_CVE_2017_16725])
+    monkeypatch.setattr(cve_lookup.epss_client, "get_epss_records", lambda ids: {"CVE-2017-16725": {
+        "score": 0.5, "percentile": 0.9, "date": "2026-08-13",
+    }})
+    monkeypatch.setattr(cve_lookup.exploit_score, "get_kev_record", lambda cve_id: {"dateAdded": "2018-01-01"})
+    monkeypatch.setattr(cve_lookup.oui_cve, "lookup_device_cves", lambda os_guess: None)
+
+    device_id = _setup_device(db)
+    with get_connection(db) as conn:
+        result = cve_lookup.correlate_device_cves(conn, device_id)
+        stored = queries.get_device_cves(conn, device_id)
+
+    expected = cve_lookup.exploit_score.compute_exploit_score(9.8, 0.5, True)
+    assert result["findings"][0]["exploit_score"] == expected
+    assert stored[0]["exploit_score"] == expected
+    assert expected is not None
