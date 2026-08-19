@@ -147,3 +147,55 @@ th, td {
 .join-form { display: flex; gap: 0.4rem; align-items: center; }
 .discovery-error { color: #e0554f; font-size: 0.85rem; }
 .devices-panel { margin-top: 1rem; }
+
+/* --- Nav / DEMO mode --- */
+.pisa-nav { margin-left: auto; display: flex; gap: 1rem; align-items: center; }
+.pisa-nav-link { color: var(--muted); text-decoration: none; font-size: 0.85rem; font-weight: 600; }
+.pisa-nav-link:hover { color: var(--text); }
+.pisa-nav-demo {
+  color: #2a1400; background: #f0973a; padding: 0.25rem 0.7rem; border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+.pisa-nav-demo:hover { background: #f7b46a; color: #2a1400; }
+
+.demo-banner {
+  background: #f0973a; color: #2a1400; font-weight: 700; text-align: center;
+  padding: 0.6rem 1rem; border-radius: 6px; margin-bottom: 1.25rem; letter-spacing: 0.03em;
+}
+.demo-note {
+  color: var(--muted); font-size: 0.85rem; margin-top: -0.5rem; margin-bottom: 1.25rem;
+}
+
+.summary-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem; margin-bottom: 1.25rem;
+}
+.summary-tile {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 0.75rem; text-align: center;
+}
+.summary-tile .tile-value { font-size: 1.6rem; font-weight: 700; }
+.summary-tile .tile-label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; }
+
+.state-badge {
+  display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px;
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-right: 0.3rem;
+}
+.state-affected, .state-verified_vulnerable, .state-exploit_successful { background: #e0554f; color: #2a0000; }
+.state-potentially_affected, .state-inconclusive, .state-timeout { background: #f0973a; color: #2a1400; }
+.state-unknown, .state-not_attempted, .state-blocked, .state-no_cpe_data, .state-nvd_unavailable { background: #8a99a8; color: #0d1b2a; }
+.state-not_applicable, .state-not_verified, .state-exploit_failed { background: #2fb380; color: #002a1a; }
+.state-cpe_confirmed { background: #2fb380; color: #002a1a; }
+.state-cpe_candidate, .state-cpe_ambiguous { background: #f0d43a; color: #2a2400; }
+
+.severity-critical { background: #e0554f; color: #2a0000; }
+.severity-high { background: #f0973a; color: #2a1400; }
+.severity-medium { background: #f0d43a; color: #2a2400; }
+.severity-low { background: #2fb380; color: #002a1a; }
+.severity-unknown { background: #8a99a8; color: #0d1b2a; }
+.severity-badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+
+.evidence-block {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 0.75rem; font-size: 0.85rem; white-space: pre-wrap; word-break: break-word;
+}

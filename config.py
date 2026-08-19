@@ -3,6 +3,10 @@ import os
 WIFI_IFACE = "wlx00c0cab96bf1"
 SCAN_DEFAULT_DURATION = 30
 DB_PATH = os.path.join(os.path.dirname(__file__), "pisa.db")
+# Demo/presentation mode (pisa/m5/routes/demo.py) — a completely separate
+# SQLite file from DB_PATH above, so demo/replay data can never be written
+# into, or confused with, a real assessment database.
+DEMO_DB_PATH = "/tmp/pisa_review_demo.db"
 # Loopback by default: the dashboard's API has no authentication, and its
 # endpoints accept WiFi passwords and trigger real network actions (join,
 # scan, device discovery) — binding to all interfaces by default would let

@@ -2,21 +2,29 @@ from flask import Flask, jsonify
 import config
 from pisa.db.connection import get_connection
 from pisa.db.models import create_tables
+from pisa.m5.demo_seed import seed_demo_data
 from pisa.m5.routes.api import bp as api_bp
 from pisa.m5.routes.dashboard import bp as dashboard_bp
+from pisa.m5.routes.demo import bp as demo_bp
 from pisa.m5.routes.sessions import bp as sessions_bp
 
 
-def create_app(db_path: str = None) -> Flask:
+def create_app(db_path: str = None, demo_db_path: str = None) -> Flask:
     app = Flask(__name__)
     app.config["DB_PATH"] = db_path or config.DB_PATH
+    # DEMO/PRESENTATION MODE — a separate SQLite file, never DB_PATH above.
+    # See pisa/m5/routes/demo.py and pisa/m5/demo_seed.py.
+    app.config["DEMO_DB_PATH"] = demo_db_path or config.DEMO_DB_PATH
 
     with get_connection(app.config["DB_PATH"]) as conn:
         create_tables(conn)
 
+    seed_demo_data(app.config["DEMO_DB_PATH"])  # idempotent — no-op if already seeded
+
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(sessions_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(demo_bp)
 
     @app.route("/api/info")
     def info():

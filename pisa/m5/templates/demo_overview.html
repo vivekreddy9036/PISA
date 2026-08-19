@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}DEMO — PISA{% endblock %}
+{% block content %}
+<div class="demo-banner">DEMO MODE — SIMULATED / REPLAY DATA — not a real assessment or a real device</div>
+<p class="demo-note">
+  Every state below (applicability, verification, exploitation) is computed by PISA's real
+  <code>pisa/m3/{applicability,verification,exploitation}.py</code> functions, driven by real CVE data
+  (live NVD/FIRST.org, captured 2026-08-19). The only simulated part is which specific device observed
+  the evidence — see <code>pisa/m5/demo_seed.py</code> for the exact seeding logic.
+</p>
+
+<h2>{{ session.target_network }}</h2>
+<p class="session-meta">Provenance: <span class="status status-error">{{ session.notes }}</span></p>
+
+<div class="summary-grid">
+  <div class="summary-tile"><div class="tile-value">{{ summary.device_count }}</div><div class="tile-label">Devices</div></div>
+  <div class="summary-tile"><div class="tile-value">{{ summary.service_count }}</div><div class="tile-label">Services</div></div>
+  <div class="summary-tile"><div class="tile-value">{{ summary.vulnerability_count }}</div><div class="tile-label">CVE Findings</div></div>
+  <div class="summary-tile"><div class="tile-value">{{ summary.severity.CRITICAL }}</div><div class="tile-label">Critical</div></div>
+</div>
+
+<section>
+  <h2>Applicability Summary</h2>
+  {% for status, count in summary.applicability.items() %}
+    <span class="state-badge state-{{ status|lower }}">{{ status }}: {{ count }}</span>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Verification Summary</h2>
+  {% for status, count in summary.verification.items() %}
+    <span class="state-badge state-{{ status|lower }}">{{ status }}: {{ count }}</span>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Exploitation-Gate Summary</h2>
+  {% if summary.exploitation %}
+    {% for status, count in summary.exploitation.items() %}
+      <span class="state-badge state-{{ status|lower }}">{{ status }}: {{ count }}</span>
+    {% endfor %}
+  {% else %}
+    <p class="session-meta">No exploitation attempted for any device in this demo scenario.</p>
+  {% endif %}
+</section>
+
+<table>
+  <thead>
+    <tr><th>Device</th><th>Type</th><th>IP</th><th>Worst Severity</th><th>Applicability</th><th>CVEs</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for row in device_rows %}
+    <tr>
+      <td>{{ row.device.identity_product or row.device.device_type or 'Device-' ~ row.device.id }}</td>
+      <td>{{ row.device.device_type or '—' }}</td>
+      <td>{{ row.device.ip_address }}</td>
+      <td><span class="severity-badge severity-{{ row.worst_severity|lower }}">{{ row.worst_severity }}</span></td>
+      <td><span class="state-badge state-{{ row.worst_applicability|lower }}">{{ row.worst_applicability }}</span></td>
+      <td>{{ row.cve_count }}</td>
+      <td><a class="back-link" href="{{ url_for('demo.device_detail', device_id=row.device.id) }}">View →</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}DEMO — {{ device.ip_address }} — PISA{% endblock %}
+{% block content %}
+<div class="demo-banner">DEMO MODE — SIMULATED / REPLAY DATA — no real device was contacted</div>
+<a href="{{ url_for('demo.overview') }}" class="back-link">&larr; Demo overview</a>
+<h2>{{ device.identity_product or device.device_type or device.ip_address }}</h2>
+<p class="session-meta">{{ device.ip_address }} &middot; {{ device.mac_address }} &middot; {{ device.device_type }}</p>
+
+<section>
+  <h2>Identity</h2>
+  <table>
+    <tr><th>Vendor</th><td>{{ device.identity_vendor or device.vendor or '—' }}</td></tr>
+    <tr><th>Product</th><td>{{ device.identity_product or '—' }}</td></tr>
+    <tr><th>Model</th><td>{{ device.identity_model or '—' }}</td></tr>
+    <tr><th>Firmware</th><td>{{ device.identity_firmware or '—' }}</td></tr>
+    <tr><th>Version</th><td>{{ device.identity_version or '—' }}</td></tr>
+    <tr><th>Fingerprint confidence</th><td>{{ device.fingerprint_confidence }}</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Services / Evidence</h2>
+  {% if signatures %}
+  <table>
+    <thead><tr><th>Protocol</th><th>Feature</th><th>Value</th><th>Confidence</th></tr></thead>
+    <tbody>
+      {% for s in signatures %}
+      <tr><td>{{ s.protocol }}</td><td>{{ s.feature_key }}</td><td>{{ s.feature_value }}</td><td>{{ s.confidence }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="session-meta">No protocol evidence recorded for this device.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>CPE Candidates</h2>
+  {% if cpe_candidates %}
+  <table>
+    <thead><tr><th>CPE</th><th>Status</th><th>Confidence</th><th>Basis</th></tr></thead>
+    <tbody>
+      {% for c in cpe_candidates %}
+      <tr>
+        <td><code>{{ c.cpe or '—' }}</code></td>
+        <td><span class="state-badge state-{{ c.status|lower }}">{{ c.status }}</span></td>
+        <td>{{ c.confidence }}</td>
+        <td>{{ c.identity_basis }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="session-meta">No CPE candidates recorded (NO_CPE_DATA).</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Vulnerability Intelligence</h2>
+  {% for c in cves %}
+  <div class="evidence-block" style="margin-bottom:0.75rem;">
+    <strong>{{ c.cve_id }}</strong> — {{ c.correlation_method or 'UNKNOWN' }}
+    <br>CVSS: {{ c.cvss_score }} ({{ c.cvss_severity }}, v{{ c.cvss_version }}) &middot;
+    EPSS: {{ '%.1f'|format((c.epss_score or 0) * 100) }}% &middot;
+    KEV: {{ 'listed' if c.kev_listed else 'not listed' }} &middot;
+    ExploitScore: {{ c.exploit_score }}
+    <br>{{ c.description }}
+  </div>
+  {% else %}
+  <p class="session-meta">No CVE findings for this device.</p>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Applicability</h2>
+  {% for c in cves %}
+  <p>
+    <span class="state-badge state-{{ c.applicability_status|lower }}">{{ c.applicability_status }}</span>
+    {{ c.cve_id }}
+  </p>
+  {% if c.applicability_reason %}
+    <div class="evidence-block">{{ c.applicability_reason }}</div>
+  {% endif %}
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Verification</h2>
+  {% if verification_attempts %}
+    {% for v in verification_attempts %}
+    <p>
+      <span class="state-badge state-{{ v.result|lower }}">{{ v.result }}</span>
+      {{ v.cve_id }} &middot; test <code>{{ v.test_id }}</code>
+    </p>
+    <div class="evidence-block">{{ v.reason }}
+{% if v.evidence %}{{ v.evidence }}{% endif %}</div>
+    {% endfor %}
+  {% else %}
+    <p class="session-meta">No verification attempted for this device.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Exploitation</h2>
+  {% if exploit_results %}
+    {% for r in exploit_results %}
+    <p>
+      <span class="state-badge state-{{ r.exploitation_status|lower }}">{{ r.exploitation_status }}</span>
+      {{ r.cve_id }} &middot; authorized by <strong>{{ r.authorized_by }}</strong> at {{ r.authorized_at }}
+    </p>
+    <div class="evidence-block">{{ r.result }}</div>
+    {% endfor %}
+  {% else %}
+    <p class="session-meta">No exploitation attempted for this device (gate not satisfied, or not attempted).</p>
+  {% endif %}
+</section>
+{% endblock %}
