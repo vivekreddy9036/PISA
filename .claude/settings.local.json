@@ -185,7 +185,9 @@
       "Bash(venv/bin/python3 -c \"import pptx; print\\('pptx', pptx.__version__\\)\")",
       "Bash(venv/bin/python3 *)",
       "Bash(mv /home/vivek/PISA/docs/PISA_Review1.pptx /home/vivek/PISA/docs/presentations/PISA_Review1.pptx)",
-      "Bash(sed -i 's#docs/PISA_Review1.pptx#docs/presentations/PISA_Review1.pptx#g' /home/vivek/PISA/scripts/generate_ppt_review1.py)"
+      "Bash(sed -i 's#docs/PISA_Review1.pptx#docs/presentations/PISA_Review1.pptx#g' /home/vivek/PISA/scripts/generate_ppt_review1.py)",
+      "WebFetch(domain:icissp.scitevents.org)",
+      "Bash(xargs -I{} basename {})"
     ]
   }
 }
