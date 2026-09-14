@@ -3,12 +3,32 @@
 // CoAP, and RTSP to be detected by pisa/m2/*_probe.py, standing in for a
 // real IP camera / hub while HW-2 (Alfa adapter) is still unavailable.
 //
-// Board: any ESP32 Dev Module. No external libraries required — uses only
-// WiFi.h / WebServer.h / WiFiUdp.h from the ESP32 Arduino core.
+// A NEO-6M GPS module is wired to Serial2 (RX2=GPIO16, TX2=GPIO17; only
+// GPS-TX -> ESP32-RX2 is required) and its last fix is leaked, unauthenticated,
+// from GET /cgi-bin/status.cgi. This is NOT a reproduction of a specific CVE
+// (unlike scripts/demo_iot_target.py's CVE-2019-16920, which is exact because
+// it has to satisfy RouterSploit's real check() for M4) — this board is only
+// exercised through M2/M3, so it's a stand-in for the common real-world
+// pattern of IoT cameras/dashcams exposing live location without auth,
+// giving M2/M3 an info-disclosure-class finding with a physically
+// demonstrable payload (a real lat/lon) instead of just a banner match.
+//
+// Board: any ESP32 Dev Module. Requires the TinyGPSPlus library (Arduino
+// Library Manager) in addition to WiFi.h / WebServer.h / WiFiUdp.h from the
+// ESP32 Arduino core.
 
 #include <WiFi.h>
 #include <WebServer.h>
 #include <WiFiUdp.h>
+#include <TinyGPSPlus.h>
+
+// ---- NEO-6M on Serial2: GPS-TX -> ESP32 GPIO16 (RX2), GPS-RX -> GPIO17 (TX2, optional) ----
+static const int GPS_RX_PIN = 16;
+static const int GPS_TX_PIN = 17;
+static const uint32_t GPS_BAUD = 9600;
+
+TinyGPSPlus gps;
+HardwareSerial GpsSerial(2);
 
 // ---- Configure before flashing ----
 const char *WIFI_SSID = "YOUR_SSID";
@@ -30,6 +50,32 @@ void handleHttpRoot() {
   httpServer.send(200, "text/html",
                    "<html><head><title>IP Camera Web Interface</title></head>"
                    "<body><h1>Camera Login</h1></body></html>");
+}
+
+// ---------------- HTTP: unauthenticated GPS location leak ----------------
+// No login/session is checked here — that's the point of the demo finding:
+// a would-be attacker can hit this without credentials and get the
+// device's live coordinates.
+void handleHttpStatusCgi() {
+  httpServer.sendHeader("Server", "GoAhead-Webs");
+  if (!gps.location.isValid()) {
+    httpServer.send(200, "application/json", "{\"gps_fix\":false}");
+    return;
+  }
+  String body = "{\"gps_fix\":true,\"lat\":" + String(gps.location.lat(), 6) +
+                ",\"lon\":" + String(gps.location.lng(), 6) +
+                ",\"alt_m\":" + String(gps.altitude.meters(), 1) +
+                ",\"sats\":" + String(gps.satellites.value()) +
+                ",\"age_ms\":" + String(gps.location.age()) + "}";
+  httpServer.send(200, "application/json", body);
+}
+
+// Feed any bytes waiting on the NEO-6M's UART into the NMEA parser. Called
+// from loop() so gps.location always reflects the most recent fix.
+void serviceGps() {
+  while (GpsSerial.available()) {
+    gps.encode(GpsSerial.read());
+  }
 }
 
 // ---------------- MQTT: reply to CONNECT with CONNACK ----------------
@@ -120,13 +166,17 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   httpServer.on("/", handleHttpRoot);
+  httpServer.on("/cgi-bin/status.cgi", handleHttpStatusCgi);
   httpServer.begin();
 
   mqttServer.begin();
   rtspServer.begin();
   coapUdp.begin(COAP_PORT);
 
+  GpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+
   Serial.println("Simulated IoT target up: HTTP:80 MQTT:1883 RTSP:554 CoAP:5683");
+  Serial.println("GPS: waiting for NEO-6M fix on Serial2 (GET /cgi-bin/status.cgi to read it)");
 }
 
 void loop() {
@@ -134,4 +184,5 @@ void loop() {
   serviceMqtt();
   serviceRtsp();
   serviceCoap();
+  serviceGps();
 }
