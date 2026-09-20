@@ -31,8 +31,8 @@ TinyGPSPlus gps;
 HardwareSerial GpsSerial(2);
 
 // ---- Configure before flashing ----
-const char *WIFI_SSID = "YOUR_SSID";
-const char *WIFI_PASSWORD = "YOUR_PASSWORD";
+const char *WIFI_SSID = "root";
+const char *WIFI_PASSWORD = "root@123";
 
 const uint16_t HTTP_PORT = 80;
 const uint16_t MQTT_PORT = 1883;
@@ -132,7 +132,12 @@ void serviceCoap() {
   uint8_t messageIdHi = buf[2];
   uint8_t messageIdLo = buf[3];
 
-  uint8_t response[64];
+  // Header (4) + token (tkl, up to 15 per the 0x0F mask above) + payload
+  // marker (1) + the 97-byte resource-discovery payload below: 64 bytes
+  // overflowed this on every real CoAP GET, smashing the stack canary and
+  // rebooting the board (found by testing M2's coap_probe against real
+  // hardware, not by the mocked unit tests).
+  uint8_t response[128];
   int idx = 0;
   response[idx++] = 0x60 | tkl;  // Ver=1, Type=ACK, same TKL
   response[idx++] = 0x45;        // Code 2.05 Content

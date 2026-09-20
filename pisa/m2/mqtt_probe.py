@@ -15,7 +15,7 @@ def _connect_and_get_reason_code(ip: str, port: int, timeout: float) -> int | No
     result: dict = {}
 
     def on_connect(client, userdata, flags, reason_code, properties=None):
-        result["reason_code"] = int(reason_code)
+        result["reason_code"] = reason_code.value
         client.disconnect()
 
     try:
