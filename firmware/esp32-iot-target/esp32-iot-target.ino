@@ -3,7 +3,7 @@
 // CoAP, and RTSP to be detected by pisa/m2/*_probe.py, standing in for a
 // real IP camera / hub while HW-2 (Alfa adapter) is still unavailable.
 //
-// A NEO-6M GPS module is wired to Serial2 (RX2=GPIO16, TX2=GPIO17; only
+// A NEO-M9N GPS module is wired to Serial2 (RX2=GPIO16, TX2=GPIO17; only
 // GPS-TX -> ESP32-RX2 is required) and its last fix is leaked, unauthenticated,
 // from GET /cgi-bin/status.cgi. This is NOT a reproduction of a specific CVE
 // (unlike scripts/demo_iot_target.py's CVE-2019-16920, which is exact because
@@ -22,10 +22,10 @@
 #include <WiFiUdp.h>
 #include <TinyGPSPlus.h>
 
-// ---- NEO-6M on Serial2: GPS-TX -> ESP32 GPIO16 (RX2), GPS-RX -> GPIO17 (TX2, optional) ----
+// ---- NEO-M9N on Serial2: GPS-TX -> ESP32 GPIO16 (RX2), GPS-RX -> GPIO17 (TX2, optional) ----
 static const int GPS_RX_PIN = 16;
 static const int GPS_TX_PIN = 17;
-static const uint32_t GPS_BAUD = 9600;
+static const uint32_t GPS_BAUD = 38400;
 
 TinyGPSPlus gps;
 HardwareSerial GpsSerial(2);
@@ -70,7 +70,7 @@ void handleHttpStatusCgi() {
   httpServer.send(200, "application/json", body);
 }
 
-// Feed any bytes waiting on the NEO-6M's UART into the NMEA parser. Called
+// Feed any bytes waiting on the NEO-M9N's UART into the NMEA parser. Called
 // from loop() so gps.location always reflects the most recent fix.
 void serviceGps() {
   while (GpsSerial.available()) {
@@ -181,7 +181,7 @@ void setup() {
   GpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
   Serial.println("Simulated IoT target up: HTTP:80 MQTT:1883 RTSP:554 CoAP:5683");
-  Serial.println("GPS: waiting for NEO-6M fix on Serial2 (GET /cgi-bin/status.cgi to read it)");
+  Serial.println("GPS: waiting for NEO-M9N fix on Serial2 (GET /cgi-bin/status.cgi to read it)");
 }
 
 void loop() {
