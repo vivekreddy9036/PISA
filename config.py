@@ -1,6 +1,6 @@
 import os
 
-WIFI_IFACE = "wlx00c0cab96bf1"
+WIFI_IFACE = "wlan1"
 SCAN_DEFAULT_DURATION = 30
 DB_PATH = os.path.join(os.path.dirname(__file__), "pisa.db")
 # Demo/presentation mode (pisa/m5/routes/demo.py) — a completely separate
@@ -20,7 +20,7 @@ FLASK_DEBUG = False
 # M1: managed-mode interface used to join a target network (distinct from the
 # monitor-mode WIFI_IFACE used for M0 beacon capture) — the Pi's built-in
 # adapter, per the dual-radio hardware layout.
-JOIN_IFACE = "wlp0s20f3"
+JOIN_IFACE = "wlan0"
 JOIN_TIMEOUT = 30
 # Safety ceiling (seconds) for the arp-scan subprocess; arp-scan's own
 # per-host timeout/retry/backoff governs actual sweep duration (~30s for an
