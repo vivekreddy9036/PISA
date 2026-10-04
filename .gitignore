@@ -1,7 +1,6 @@
 venv/
 __pycache__/
 *.pyc
-pisa.db
 .pytest_cache/
 htmlcov/
 .coverage
