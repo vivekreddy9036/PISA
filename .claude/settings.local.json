@@ -188,7 +188,21 @@
       "Bash(sed -i 's#docs/PISA_Review1.pptx#docs/presentations/PISA_Review1.pptx#g' /home/vivek/PISA/scripts/generate_ppt_review1.py)",
       "WebFetch(domain:icissp.scitevents.org)",
       "Bash(xargs -I{} basename {})",
-      "Skill(artifact-design)"
+      "Skill(artifact-design)",
+      "Bash(find pisa *)",
+      "Bash(find docs *)",
+      "Bash(find firmware *)",
+      "Bash(find terraform *)",
+      "Bash(find tests *)",
+      "Bash(where soffice *)",
+      "Bash(where libreoffice *)",
+      "Bash(reg query *)",
+      "Bash(where winword *)",
+      "Bash(mkdir -p \"C:/Vivek's Workspace/Projects/Project Phase 1/Report/build\")",
+      "Bash(mkdir -p \"C:/Vivek's Workspace/Projects/Project Phase 1/Report/assets\")",
+      "Bash(tasklist)",
+      "Bash(where pdftoppm *)",
+      "Bash(where magick *)"
     ]
   }
 }
